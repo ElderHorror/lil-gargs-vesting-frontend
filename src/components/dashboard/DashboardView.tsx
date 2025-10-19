@@ -119,14 +119,34 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
           poolBalance: (activePool.totalAmount as number) || prev.poolBalance,
         }));
 
-        // Load snapshot rules from pool's nft_requirements
-        // Note: This requires fetching the full pool details with nft_requirements field
+        // Load rules based on pool vesting mode
         try {
           const poolDetails = await api.get<Record<string, unknown>>(`/pools/${String(activePool.id)}`);
           console.log("Pool details:", poolDetails);
           
-          if (poolDetails?.nftRequirements && Array.isArray(poolDetails.nftRequirements) && poolDetails.nftRequirements.length > 0) {
-            // Convert nft_requirements to SnapshotRule format
+          const vestingMode = activePool.vestingMode as string;
+          
+          if (vestingMode === 'manual') {
+            // For manual pools, load allocations as rules
+            const vestings = await api.get<Array<Record<string, unknown>>>(`/pools/${activePool.id}/activity`);
+            console.log("Manual pool vestings:", vestings);
+            
+            if (vestings && vestings.length > 0) {
+              const manualRules: SnapshotRule[] = vestings.map((vesting: Record<string, unknown>, index: number) => ({
+                id: `manual-${index}`,
+                name: `${String(vesting.user_wallet).slice(0, 8)}...${String(vesting.user_wallet).slice(-4)}`,
+                nftContract: String(vesting.user_wallet), // Store wallet address in nftContract field
+                threshold: 0, // Not applicable for manual
+                allocationType: 'FIXED' as const,
+                allocationValue: Number(vesting.token_amount || 0),
+                enabled: Boolean(vesting.is_active),
+              }));
+              
+              setRules(manualRules);
+              console.log("Loaded manual allocations as rules:", manualRules);
+            }
+          } else if (poolDetails?.nftRequirements && Array.isArray(poolDetails.nftRequirements) && poolDetails.nftRequirements.length > 0) {
+            // Convert nft_requirements to SnapshotRule format for snapshot/dynamic pools
             const loadedRules: SnapshotRule[] = poolDetails.nftRequirements.map((req: Record<string, unknown>, index: number) => ({
               id: `rule-${index}`,
               name: String(req.name || `Rule ${index + 1}`),
@@ -204,8 +224,28 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         poolBalance: (poolDetails.totalAmount as number) || prev.poolBalance,
       }));
       
-      // Load rules if available
-      if (poolDetails.nftRequirements && Array.isArray(poolDetails.nftRequirements)) {
+      const vestingMode = selectedPool?.vestingMode as string;
+      
+      // Load rules based on vesting mode
+      if (vestingMode === 'manual') {
+        // For manual pools, load allocations as rules
+        const vestings = await api.get<Array<Record<string, unknown>>>(`/pools/${poolId}/activity`);
+        if (vestings && vestings.length > 0) {
+          const manualRules: SnapshotRule[] = vestings.map((vesting: Record<string, unknown>, index: number) => ({
+            id: `manual-${index}`,
+            name: `${String(vesting.user_wallet).slice(0, 8)}...${String(vesting.user_wallet).slice(-4)}`,
+            nftContract: String(vesting.user_wallet),
+            threshold: 0,
+            allocationType: 'FIXED' as const,
+            allocationValue: Number(vesting.token_amount || 0),
+            enabled: Boolean(vesting.is_active),
+          }));
+          setRules(manualRules);
+        } else {
+          setRules([]);
+        }
+      } else if (poolDetails.nftRequirements && Array.isArray(poolDetails.nftRequirements) && poolDetails.nftRequirements.length > 0) {
+        // Load NFT-based rules for snapshot/dynamic pools
         const loadedRules: SnapshotRule[] = poolDetails.nftRequirements.map((req: Record<string, unknown>, index: number) => ({
           id: `rule-${index}`,
           name: String(req.name || `Rule ${index + 1}`),
@@ -216,6 +256,8 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
           enabled: true,
         }));
         setRules(loadedRules);
+      } else {
+        setRules([]);
       }
       
       // Load Streamflow status
@@ -364,25 +406,29 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
       </section>
 
       <section className="glass-panel flex flex-col gap-4 rounded-2xl p-6">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-[var(--muted)]">Allocations Designer</p>
-              <h2 className="mt-1 text-xl font-semibold text-white">Snapshot Rules</h2>
-              {Boolean(streamflowStatus?.deployed) && (
-                <p className="text-xs text-green-400 mt-1">
-                  ✓ On-chain vesting: {Number(streamflowStatus?.vestedPercentage || 0).toFixed(1)}% vested
-                </p>
-              )}
-            </div>
-            
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs uppercase tracking-[0.35em] text-[var(--muted)]">
+              {poolVestingMode === 'manual' ? 'Manual Allocations' : 'Allocations Designer'}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-white">
+              {poolVestingMode === 'manual' ? 'Wallet Allocations' : 'Snapshot Rules'}
+            </h2>
+            {Boolean(streamflowStatus?.deployed) && (
+              <p className="text-xs text-green-400 mt-1">
+                ✓ On-chain vesting: {Number(streamflowStatus?.vestedPercentage || 0).toFixed(1)}% vested
+              </p>
+            )}
+          </div>
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
             {availablePools.length > 1 && (
-              <div className="ml-4">
+              <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[300px]">
                 <label className="text-xs text-white/60 block mb-1">Pool</label>
                 <select
                   value={selectedPoolId || ""}
                   onChange={(e) => handlePoolChange(e.target.value)}
-                  className="rounded-lg border border-[var(--border)] bg-[#0c0b25] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                  className="w-full rounded-lg border border-[var(--border)] bg-[#0c0b25] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent)] truncate"
                 >
                   {availablePools.map((pool) => (
                     <option key={String(pool.id)} value={String(pool.id)}>
@@ -392,8 +438,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 </select>
               </div>
             )}
-          </div>
-          <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
             <div className="text-right">
               <p className="text-white/60 text-xs">Total Wallets</p>
               <p className="font-semibold text-white">{summary?.totalWallets ?? "--"}</p>
@@ -412,14 +457,21 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 <p className="font-semibold text-green-400 text-xs">{String(streamflowStatus?.streamflowId || '').slice(0, 8)}...</p>
               </div>
             )}
+            </div>
           </div>
         </header>
 
         <div className="space-y-4">
           {rules.length === 0 ? (
             <div className="rounded-xl bg-blue-500/10 border border-blue-500/30 p-6 text-center">
-              <p className="text-lg font-semibold text-blue-400 mb-2">No Rules Configured</p>
-              <p className="text-sm text-white/60 mb-4">Create a vesting pool to add allocation rules</p>
+              <p className="text-lg font-semibold text-blue-400 mb-2">
+                {poolVestingMode === 'manual' ? 'No Allocations' : 'No Rules Configured'}
+              </p>
+              <p className="text-sm text-white/60 mb-4">
+                {poolVestingMode === 'manual' 
+                  ? 'No wallet allocations found for this manual pool' 
+                  : 'Create a vesting pool to add allocation rules'}
+              </p>
               {poolVestingMode === 'dynamic' && (
                 <Button 
                   variant="secondary" 
@@ -444,8 +496,8 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 </div>
               )}
               
-              <div className="overflow-x-auto -mx-6 px-6">
-                <div className="min-w-[600px] max-h-[400px] overflow-y-auto rounded-2xl border border-[var(--border)]">
+              <div className="overflow-x-auto -mx-6 px-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-transparent">
+                <div className="min-w-[1200px] max-h-[400px] overflow-y-auto rounded-2xl border border-[var(--border)]">
                   <RuleTable rules={rules} onEdit={handleEdit} onToggle={toggleRule} />
                 </div>
               </div>
