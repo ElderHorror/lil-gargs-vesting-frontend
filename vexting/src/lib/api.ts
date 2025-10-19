@@ -1,4 +1,4 @@
-const API_BASE = "https://lil-gargs-vesting-backend.onrender.com/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001/api";
 
 interface RequestOptions extends RequestInit {
   json?: unknown;

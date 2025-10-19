@@ -116,7 +116,7 @@ export function VestingRewardsPage() {
 
   const { sendTransaction } = useWallet();
   const connection = useMemo(
-    () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
+    () => new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.devnet.solana.com'),
     []
   );
 
