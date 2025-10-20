@@ -86,7 +86,7 @@ export function EditAllocationsModal({
     setAllocations((prev) => prev.filter((a) => a.id !== id));
   }
 
-  function updateAllocation(id: string, field: keyof ManualAllocation, value: any) {
+  function updateAllocation(id: string, field: keyof ManualAllocation, value: string | number | undefined) {
     setAllocations((prev) =>
       prev.map((a) => (a.id === id ? { ...a, [field]: value } : a))
     );

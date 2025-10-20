@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection, Transaction } from "@solana/web3.js";
 import { VestingRewardsCard, VestingSummary, ClaimHistoryItem } from "./VestingRewardsCard";
@@ -296,9 +297,11 @@ export function VestingRewardsPage() {
     <div className="mb-8 space-y-6">
       {/* Logo Header */}
       <div className="flex items-center justify-center gap-4">
-        <img 
+        <Image 
           src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg" 
           alt="Lil Gargs" 
+          width={64}
+          height={64}
           className="h-16 w-16 rounded-full border-2 border-purple-500/50 shadow-lg shadow-purple-500/20"
         />
         <div className="text-center">
