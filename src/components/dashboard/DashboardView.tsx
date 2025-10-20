@@ -9,6 +9,7 @@ import { ClaimsPolicyPanel } from "@/components/dashboard/ClaimsPolicyPanel";
 import { TreasuryWidget } from "@/components/dashboard/TreasuryWidget";
 import { EditRuleModal } from "@/components/dashboard/EditRuleModal";
 import { AddRuleModal } from "@/components/dashboard/AddRuleModal";
+import { EditAllocationsModal } from "@/components/vesting/EditAllocationsModal";
 import type {
   SnapshotRule,
   SnapshotSummaryResponse,
@@ -85,6 +86,14 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
   const [selectedPoolId, setSelectedPoolId] = useState<string | null>(null);
   const [poolVestingMode, setPoolVestingMode] = useState<string | null>(null);
   const [addRuleModalOpen, setAddRuleModalOpen] = useState(false);
+  const [editAllocationsModalOpen, setEditAllocationsModalOpen] = useState(false);
+  const [currentAllocations, setCurrentAllocations] = useState<Array<{
+    user_wallet: string;
+    token_amount: number;
+    share_percentage: number;
+  }>>([]);
+  const [poolTotalAmount, setPoolTotalAmount] = useState(0);
+  const [poolName, setPoolName] = useState("");
 
   useEffect(() => {
     if (initialSummary) return;
@@ -112,6 +121,8 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         setActivePoolId(String(activePool.id));
         setSelectedPoolId(String(activePool.id));
         setPoolVestingMode(activePool.vestingMode as "snapshot" | "dynamic" | "manual");
+        setPoolName(String(activePool.name || 'Vesting Pool'));
+        setPoolTotalAmount(Number(activePool.totalAmount || 0));
         
         // Update metrics with real pool data
         setMetrics((prev) => ({
@@ -132,6 +143,13 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
             console.log("Manual pool vestings:", vestings);
             
             if (vestings && vestings.length > 0) {
+              // Store allocations for editing
+              setCurrentAllocations(vestings.map((v: Record<string, unknown>) => ({
+                user_wallet: String(v.user_wallet),
+                token_amount: Number(v.token_amount),
+                share_percentage: Number(v.share_percentage),
+              })));
+
               const manualRules: SnapshotRule[] = vestings.map((vesting: Record<string, unknown>, index: number) => ({
                 id: `manual-${index}`,
                 name: `${String(vesting.user_wallet).slice(0, 8)}...${String(vesting.user_wallet).slice(-4)}`,
@@ -484,8 +502,17 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
             </div>
           ) : (
             <>
-              {poolVestingMode === 'dynamic' && (
-                <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {poolVestingMode === 'manual' && (
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    onClick={() => setEditAllocationsModalOpen(true)}
+                  >
+                    ✏️ Edit Allocations
+                  </Button>
+                )}
+                {poolVestingMode === 'dynamic' && (
                   <Button 
                     variant="secondary" 
                     size="sm" 
@@ -493,8 +520,8 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                   >
                     + Add New Rule
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
               
               <div className="overflow-x-auto -mx-6 px-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-transparent">
                 <div className="min-w-[1200px] max-h-[400px] overflow-y-auto rounded-2xl border border-[var(--border)]">
@@ -602,6 +629,20 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
           onClose={() => setAddRuleModalOpen(false)}
           poolId={activePoolId}
           onSuccess={handleAddRuleSuccess}
+        />
+      )}
+      {activePoolId && poolVestingMode === 'manual' && (
+        <EditAllocationsModal
+          open={editAllocationsModalOpen}
+          onClose={() => setEditAllocationsModalOpen(false)}
+          poolId={activePoolId}
+          poolName={poolName}
+          totalPoolAmount={poolTotalAmount}
+          currentAllocations={currentAllocations}
+          onSuccess={() => {
+            loadActivePoolData();
+            setEditAllocationsModalOpen(false);
+          }}
         />
       )}
     </div>

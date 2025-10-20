@@ -240,8 +240,17 @@ export function VestingRewardsCard({
       <div className="w-full rounded-3xl border border-white/10 bg-[#151236] px-6 py-7 shadow-[0_40px_120px_-40px_rgba(58,46,216,0.65)]">
         <div className="space-y-6">
           {error && (
-            <div className="rounded-2xl border border-[var(--danger)]/40 bg-[var(--danger)]/10 p-3 text-sm text-[var(--danger)]">
-              {error}
+            <div className="rounded-2xl border border-[var(--danger)]/40 bg-[var(--danger)]/10 p-4 text-sm text-[var(--danger)]">
+              <div className="flex items-start gap-3">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--danger)]/20">
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1 whitespace-pre-line">
+                  {error}
+                </div>
+              </div>
             </div>
           )}
 
