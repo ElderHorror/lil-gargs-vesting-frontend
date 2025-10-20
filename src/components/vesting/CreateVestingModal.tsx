@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { api } from "@/lib/api";
+import { api, ValidationResult } from "@/lib/api";
 
 export type VestingMode = "snapshot" | "dynamic" | "manual";
 
@@ -71,6 +71,9 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
   const [bulkAllocationValue, setBulkAllocationValue] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<ValidationResult | null>(null);
+  const [skipStreamflow, setSkipStreamflow] = useState(false);
+  const [showValidation, setShowValidation] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -86,7 +89,39 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
     setBulkAllocationType("FIXED");
     setBulkAllocationValue(0);
     setError(null);
+    setValidation(null);
+    setSkipStreamflow(false);
+    setShowValidation(false);
   }, [open, mode]);
+
+  async function validatePool() {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const start = Math.floor(new Date(cycleStart).getTime() / 1000);
+      
+      const validationResult = await api.post<ValidationResult>("/pools/validate", {
+        start_time: new Date(start * 1000).toISOString(),
+        total_pool_amount: Number(amount),
+        vesting_mode: currentMode,
+        manual_allocations: currentMode === "manual" ? manualAllocations.filter(a => a.wallet).map(a => ({
+          allocationType: a.allocationType,
+          allocationValue: a.allocationValue,
+        })) : undefined,
+      });
+      
+      setValidation(validationResult);
+      setShowValidation(true);
+      
+      return validationResult;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Validation failed");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function updateRule(index: number, key: keyof RuleForm, value: RuleForm[typeof key]) {
     setRules((prev) =>
@@ -142,6 +177,19 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
     setError(null);
 
     try {
+      // Run validation first if not already validated
+      if (!validation || !showValidation) {
+        const validationResult = await validatePool();
+        if (!validationResult) {
+          return; // Validation failed
+        }
+        
+        // If validation has errors and not skipping Streamflow, show validation UI
+        if (!validationResult.valid && !skipStreamflow) {
+          return; // Let user review validation results
+        }
+      }
+
       const start = cycleStart ? new Date(cycleStart).getTime() / 1000 : Math.floor(Date.now() / 1000);
       if (!cycleEnd) {
         throw new Error("Please provide an end time for the vesting cycle.");
@@ -243,6 +291,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
           is_active: true,
           vesting_mode: "snapshot",
           rules: payloadRules, // Include rules for nft_requirements
+          skipStreamflow, // Pass skipStreamflow flag
         });
         console.log("Pool created:", streamResult);
 
@@ -263,9 +312,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
         });
         console.log("Commit result:", commitResult);
 
-        const streamflowMsg = streamflowDeployed 
-          ? `\n✅ Deployed to Streamflow: ${streamflowId?.slice(0, 8)}...`
-          : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
+        const streamflowMsg = skipStreamflow
+          ? '\n📝 Pool created in database only (Streamflow deployment skipped)'
+          : streamflowDeployed 
+            ? `\n✅ Deployed to Streamflow: ${streamflowId?.slice(0, 8)}...`
+            : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
 
         alert(`Vesting created successfully! ${(processData.allocations as unknown[]).length} wallets allocated.${streamflowMsg}`);
       } else if (currentMode === "manual") {
@@ -290,6 +341,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
             allocationValue: a.allocationValue,
             note: a.note || undefined,
           })),
+          skipStreamflow, // Pass skipStreamflow flag
         });
         console.log("Manual pool created:", streamResult);
         
@@ -297,9 +349,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
         const manualStreamObj = manualStreamData.stream as Record<string, unknown> | undefined;
         const streamflowDeployed = manualStreamData.streamflowDeployed;
         const streamflowId = manualStreamObj?.streamflow_stream_id as string | undefined;
-        const streamflowMsg = streamflowDeployed 
-          ? `\n✅ Deployed to Streamflow: ${streamflowId?.slice(0, 8)}...`
-          : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
+        const streamflowMsg = skipStreamflow
+          ? '\n📝 Pool created in database only (Streamflow deployment skipped)'
+          : streamflowDeployed 
+            ? `\n✅ Deployed to Streamflow: ${streamflowId?.slice(0, 8)}...`
+            : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
         
         alert(`Manual vesting pool created! ${manualAllocations.length} wallet(s) allocated.${streamflowMsg}`);
       } else {
@@ -316,6 +370,7 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
           is_active: true,
           vesting_mode: "dynamic",
           rules: payloadRules, // Include rules for nft_requirements
+          skipStreamflow, // Pass skipStreamflow flag
         });
         console.log("Dynamic pool created:", streamResult);
         
@@ -323,9 +378,11 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
         const dynamicStreamObj = dynamicStreamData.stream as Record<string, unknown> | undefined;
         const dynamicStreamflowDeployed = dynamicStreamData.streamflowDeployed;
         const dynamicStreamflowId = dynamicStreamObj?.streamflow_stream_id as string | undefined;
-        const dynamicStreamflowMsg = dynamicStreamflowDeployed 
-          ? `\n✅ Deployed to Streamflow: ${dynamicStreamflowId?.slice(0, 8)}...`
-          : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
+        const dynamicStreamflowMsg = skipStreamflow
+          ? '\n📝 Pool created in database only (Streamflow deployment skipped)'
+          : dynamicStreamflowDeployed 
+            ? `\n✅ Deployed to Streamflow: ${dynamicStreamflowId?.slice(0, 8)}...`
+            : '\n⚠️ Streamflow deployment failed (pool still created in DB)';
         
         alert(`Dynamic vesting pool created! Sync daemon will create vesting records.${dynamicStreamflowMsg}`);
       }
@@ -669,11 +726,92 @@ GHI789..."
           </div>
         )}
 
+        {/* Validation Results */}
+        {showValidation && validation && (
+          <section className="space-y-3 rounded-2xl border border-[var(--accent)]/30 bg-[var(--accent)]/10 p-4">
+            <h3 className="text-sm font-semibold text-white">Pre-Flight Validation</h3>
+            
+            {/* Errors */}
+            {validation.errors.length > 0 && (
+              <div className="space-y-2">
+                {validation.errors.map((err, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-red-400">
+                    <span>❌</span>
+                    <span>{err}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Warnings */}
+            {validation.warnings.length > 0 && (
+              <div className="space-y-2">
+                {validation.warnings.map((warn, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs text-yellow-400">
+                    <span>⚠️</span>
+                    <span>{warn}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Treasury Info */}
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-white/60">Treasury Wallet:</span>
+                <span className="font-mono text-white">{validation.checks.treasury.address.slice(0, 8)}...{validation.checks.treasury.address.slice(-4)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">SOL Balance:</span>
+                <span className={validation.checks.solBalance.valid ? "text-green-400" : "text-red-400"}>
+                  {validation.checks.solBalance.current.toFixed(4)} SOL {validation.checks.solBalance.valid ? "✓" : "✗"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/60">Token Balance:</span>
+                <span className={validation.checks.tokenBalance.valid ? "text-green-400" : "text-red-400"}>
+                  {validation.checks.tokenBalance.current.toFixed(2)} {validation.checks.tokenBalance.valid ? "✓" : "✗"}
+                </span>
+              </div>
+            </div>
+
+            {/* Skip Streamflow Option */}
+            {!validation.valid && validation.canProceedWithoutStreamflow && (
+              <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+                <input
+                  type="checkbox"
+                  checked={skipStreamflow}
+                  onChange={(e) => setSkipStreamflow(e.target.checked)}
+                  className="h-4 w-4 rounded border-white/20 bg-white/10 text-[var(--accent)] focus:ring-[var(--accent)]"
+                />
+                <span className="text-xs text-white">
+                  Create pool without Streamflow deployment (database only)
+                </span>
+              </label>
+            )}
+          </section>
+        )}
+
         <footer className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
-          <Button size="sm" onClick={handleCreate} loading={loading}>
+          {showValidation && !validation?.valid && !skipStreamflow && (
+            <Button variant="secondary" size="sm" onClick={validatePool} loading={loading}>
+              Retry Validation
+            </Button>
+          )}
+          {!showValidation && (
+            <Button variant="secondary" size="sm" onClick={validatePool} loading={loading}>
+              Validate
+            </Button>
+          )}
+          <Button 
+            size="sm" 
+            onClick={handleCreate} 
+            loading={loading}
+            disabled={showValidation && !validation?.valid && !skipStreamflow}
+          >
             Create Vesting
           </Button>
         </footer>

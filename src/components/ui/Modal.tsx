@@ -43,14 +43,6 @@ export function Modal({ open, title, description, children, footer, onClose, wid
           widthClassName ?? "max-w-xl"
         )}
       >
-        <button
-          className="absolute right-4 top-4 text-white/60 transition hover:text-white"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          ✕
-        </button>
-
         {(title || description) && (
           <header className="mb-4 space-y-1">
             {title && <h2 className="text-xl font-semibold text-white">{title}</h2>}

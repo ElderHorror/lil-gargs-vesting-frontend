@@ -68,13 +68,23 @@ export function VestingRewardsPage() {
           }
         } catch (err) {
           console.error(`Failed to load summary for pool ${pool.poolName}:`, err);
+          // Don't show error to user - just skip this pool's summary
         }
       }
       setSummaries(newSummaries);
     } catch (err) {
-      setPools([]);
-      setSummaries(new Map());
-      setError(err instanceof Error ? err.message : "Failed to load pools");
+      // No pools (404) is normal for new users - don't show as error
+      const errorMessage = err instanceof Error ? err.message : '';
+      if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        setPools([]);
+        setSummaries(new Map());
+        // Don't set error - this is a normal state
+      } else {
+        // Only show error for actual failures
+        setPools([]);
+        setSummaries(new Map());
+        setError(err instanceof Error ? err.message : "Failed to load pools");
+      }
     } finally {
       setLoadingPools(false);
     }
@@ -87,7 +97,7 @@ export function VestingRewardsPage() {
     }
     
     setLoadingHistory(true);
-    setError(null);
+    // Don't clear error here - only clear on actual errors, not empty history
     
     try {
       const response = await api.get<{ success: boolean; data: ClaimHistoryItem[] }>(
@@ -95,21 +105,33 @@ export function VestingRewardsPage() {
       );
       setHistory(response.data ?? []);
     } catch (err) {
-      setHistory([]);
-      setError(err instanceof Error ? err.message : "Failed to load history");
+      // Empty history (404) is normal - don't show as error
+      const errorMessage = err instanceof Error ? err.message : '';
+      if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+        setHistory([]); // Just set empty history, no error
+      } else {
+        // Only show error for actual failures (network, server errors, etc.)
+        setHistory([]);
+        setError(err instanceof Error ? err.message : "Failed to load history");
+      }
     } finally {
       setLoadingHistory(false);
     }
   }, [wallet]);
 
   useEffect(() => {
+    // Initial load
     void loadPools();
     void loadHistory();
     
-    // Auto-refresh pools every 5 seconds to get updated Streamflow vested %
+    // Optimized polling: Only refresh history periodically
+    // Vesting amounts are calculated client-side in VestingRewardsCard
     const interval = setInterval(() => {
-      void loadPools();
-    }, 5000); // 5 seconds - faster updates for smoother experience
+      // Only poll when tab is visible to save resources
+      if (document.visibilityState === 'visible') {
+        void loadHistory(); // Only history, not pools (vesting is calculated client-side)
+      }
+    }, 60000); // 1 minute - reduced from 5 seconds (12x fewer API calls)
     
     return () => clearInterval(interval);
   }, [loadPools, loadHistory]);
@@ -167,7 +189,20 @@ export function VestingRewardsPage() {
         feeSignature = await sendTransaction(feeTransaction, connection);
         console.log('[CLAIM] Fee transaction sent:', feeSignature);
       } catch (err) {
-        throw new Error(`Failed to send fee transaction: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        
+        // Check for insufficient balance error
+        if (errorMessage.includes('Insufficient SOL balance') || 
+            errorMessage.includes('insufficient funds') ||
+            errorMessage.includes('Attempt to debit an account but found no record')) {
+          throw new Error(
+            `❌ Insufficient SOL Balance\n\n` +
+            `You need ${claimResponse.feeDetails.amountSol.toFixed(4)} SOL to pay the claim fee.\n\n` +
+            `Please add SOL to your wallet and try again.`
+          );
+        }
+        
+        throw new Error(`Failed to send fee transaction: ${errorMessage}`);
       }
       
       // Wait for fee confirmation with timeout
@@ -228,7 +263,7 @@ export function VestingRewardsPage() {
         throw new Error('Failed to complete claim');
       }
 
-      // Refresh data
+      // Refresh data after successful claim
       await Promise.all([loadPools(), loadHistory()]);
       
       // Show success toast
@@ -280,7 +315,22 @@ export function VestingRewardsPage() {
             Claim your rewards automatically over time
           </h2>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-3">
+          {wallet && (
+            <button
+              onClick={() => {
+                void loadPools();
+                void loadHistory();
+              }}
+              disabled={loadingPools || loadingHistory}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 disabled:opacity-50"
+              title="Refresh data"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
           <WalletConnectButton onWalletChange={handleWalletChange} />
         </div>
       </div>
