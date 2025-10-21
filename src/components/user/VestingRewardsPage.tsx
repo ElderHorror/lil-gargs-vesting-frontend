@@ -481,7 +481,7 @@ export function VestingRewardsPage() {
         </div>
       )}
       
-      <div className="mt-8">{footer}</div>
+      {/* <div className="mt-8">{footer}</div> */}
     </div>
   );
 }
