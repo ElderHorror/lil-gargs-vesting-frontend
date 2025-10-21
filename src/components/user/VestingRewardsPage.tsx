@@ -102,7 +102,7 @@ export function VestingRewardsPage() {
     
     try {
       const response = await api.get<{ success: boolean; data: ClaimHistoryItem[] }>(
-        `/user/vesting/history?wallet=${wallet}`
+        `/user/vesting/claim-history?wallet=${wallet}`
       );
       setHistory(response.data ?? []);
     } catch (err) {
