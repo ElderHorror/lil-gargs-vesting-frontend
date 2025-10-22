@@ -19,6 +19,8 @@ function useCopyToClipboard() {
 
 export type VestingSummary = {
   poolTotal: number;
+  poolState: string;
+  poolPaused: boolean;
   distributionType: string;
   userShare: {
     percentage: number;
@@ -274,6 +276,18 @@ export function VestingRewardsCard({
                       <span className="text-sm font-semibold text-green-400">{liveVestedPercentage.toFixed(2)}% Vested</span>
                     </div>
                   )}
+                  {summary.poolState === 'paused' && (
+                    <div className="flex items-center justify-between rounded-xl bg-yellow-500/10 border border-yellow-500/30 px-4 py-3">
+                      <span className="text-xs uppercase tracking-[0.3em] text-yellow-400">Pool Paused</span>
+                      <span className="text-sm font-semibold text-yellow-400">Claims Temporarily Disabled</span>
+                    </div>
+                  )}
+                  {summary.poolState === 'cancelled' && (
+                    <div className="flex items-center justify-between rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3">
+                      <span className="text-xs uppercase tracking-[0.3em] text-red-400">Pool Cancelled</span>
+                      <span className="text-sm font-semibold text-red-400">No Further Claims Allowed</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-5">
@@ -327,13 +341,12 @@ export function VestingRewardsCard({
                     className="w-full text-sm font-semibold"
                     loading={claimLoading}
                     onClick={() => onClaim(poolId)}
-                    disabled={!canClaim || claimLoading}
+                    disabled={!canClaim || claimLoading || summary.poolState === 'paused' || summary.poolState === 'cancelled'}
                   >
-                    Claim Unlocked $GARG
+                    {summary.poolState === 'paused' ? 'Pool Paused - Claims Disabled' : 
+                     summary.poolState === 'cancelled' ? 'Pool Cancelled - No Claims' : 
+                     'Claim Unlocked $GARG'}
                   </Button>
-                  <p className="mt-2 text-center text-xs text-white/40">
-                    A $10 claim fee will be charged in SOL. Tokens will be transferred to your wallet after payment.
-                  </p>
                 </div>
               </section>
             </div>

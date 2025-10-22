@@ -10,6 +10,7 @@ import { TreasuryWidget } from "@/components/dashboard/TreasuryWidget";
 import { EditRuleModal } from "@/components/dashboard/EditRuleModal";
 import { AddRuleModal } from "@/components/dashboard/AddRuleModal";
 import { EditAllocationsModal } from "@/components/vesting/EditAllocationsModal";
+import { AdminPoolManager } from "@/components/admin/AdminPoolManager";
 import type {
   SnapshotRule,
   SnapshotSummaryResponse,
@@ -20,6 +21,7 @@ import type {
 import { api } from "@/lib/api";
 // import { cn } from "@/lib/utils";
 import { formatTokenAmount } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 
 type DashboardViewProps = {
   initialRules: SnapshotRule[];
@@ -95,6 +97,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
   const [poolTotalAmount, setPoolTotalAmount] = useState(0);
   const [poolName, setPoolName] = useState("");
   const [syncLoading, setSyncLoading] = useState(false);
+  const [poolState, setPoolState] = useState<string>("active");
 
   useEffect(() => {
     if (initialSummary) return;
@@ -122,6 +125,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
         setActivePoolId(String(activePool.id));
         setSelectedPoolId(String(activePool.id));
         setPoolVestingMode(activePool.vestingMode as "snapshot" | "dynamic" | "manual");
+        setPoolState(activePool.state as string || "active");
         setPoolName(String(activePool.name || 'Vesting Pool'));
         setPoolTotalAmount(Number(activePool.totalAmount || 0));
         
@@ -227,10 +231,11 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
     setSelectedPoolId(poolId);
     setActivePoolId(poolId);
     
-    // Find selected pool to get vesting mode
+    // Find selected pool to get vesting mode and state
     const selectedPool = availablePools.find(p => p.id === poolId);
     if (selectedPool) {
       setPoolVestingMode(selectedPool.vestingMode as "snapshot" | "dynamic" | "manual");
+      setPoolState(selectedPool.state as string || "active");
     }
     
     // Reload data for selected pool
@@ -459,11 +464,28 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
             <h2 className="mt-1 text-xl font-semibold text-white">
               {poolVestingMode === 'manual' ? 'Wallet Allocations' : 'Snapshot Rules'}
             </h2>
-            {Boolean(streamflowStatus?.deployed) && (
-              <p className="text-xs text-green-400 mt-1">
-                ✓ On-chain vesting: {Number(streamflowStatus?.vestedPercentage || 0).toFixed(1)}% vested
-              </p>
-            )}
+            {selectedPoolId && (() => {
+              const selectedPool = availablePools.find(p => String(p.id) === selectedPoolId);
+              return (
+                <>
+                  {selectedPool?.state === 'paused' && (
+                    <p className="text-xs text-yellow-400 mt-1">
+                      ⚠️ Pool is currently paused - claims are disabled
+                    </p>
+                  )}
+                  {selectedPool?.state === 'cancelled' && (
+                    <p className="text-xs text-red-400 mt-1">
+                      ⚠️ Pool has been cancelled - no further claims allowed
+                    </p>
+                  )}
+                  {Boolean(streamflowStatus?.deployed) && (
+                    <p className="text-xs text-green-400 mt-1">
+                      ✓ On-chain vesting: {Number(streamflowStatus?.vestedPercentage || 0).toFixed(1)}% vested
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
@@ -477,7 +499,10 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                 >
                   {availablePools.map((pool) => (
                     <option key={String(pool.id)} value={String(pool.id)}>
-                      {String(pool.name)} {pool.isActive ? "(Active)" : ""}
+                      {String(pool.name)} 
+                      {pool.state === 'active' && '(Active)'}
+                      {pool.state === 'paused' && '(Paused)'}
+                      {pool.state === 'cancelled' && '(Cancelled)'}
                     </option>
                   ))}
                 </select>
@@ -683,41 +708,19 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
           }}
         />
       )}
+      
+      {activePoolId && (
+        <AdminPoolManager
+          poolId={activePoolId}
+          poolName={poolName}
+          poolState={poolState}
+          onPoolStateChange={setPoolState}
+        />
+      )}
     </div>
   );
 }
 
-/* type SettingRowProps = {
-  label: string;
-  value: string;
-  helper?: string;
-  tone?: "default" | "success" | "warning" | "danger";
-};
-
-function SettingRow({ label, value, helper, tone = "default" }: SettingRowProps) {
-  return (
-    <div className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
-      <div>
-        <p className="text-xs uppercase tracking-[0.25em] text-white/50">{label}</p>
-        {helper && <p className="text-xs text-white/40">{helper}</p>}
-      </div>
-      <span
-        className={cn(
-          "rounded-full px-3 py-1 text-xs font-medium",
-          tone === "success"
-            ? "bg-[var(--success)]/15 text-[var(--success)]"
-            : tone === "warning"
-              ? "bg-[#f0b94e33] text-[#f0b94e]"
-              : tone === "danger"
-                ? "bg-[var(--danger)]/15 text-[var(--danger)]"
-                : "bg-white/10 text-white/80"
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-} */
 
 type ActivityItemProps = {
   label: string;

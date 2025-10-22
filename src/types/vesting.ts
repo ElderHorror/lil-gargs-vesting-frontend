@@ -63,3 +63,33 @@ export interface RulePreviewResponse {
   totalNfts: number;
   estimatedAllocation: number;
 }
+
+// Pool member management types
+export interface PoolMember {
+  id: string;
+  user_wallet: string;
+  token_amount: number;
+  nft_count: number;
+  tier: number;
+  created_at: string;
+  is_active: boolean;
+  is_cancelled: boolean;
+}
+
+export interface PoolMembersResponse {
+  success: boolean;
+  members: PoolMember[];
+}
+
+// Pool state management types
+export type PoolState = 'active' | 'paused' | 'cancelled';
+
+export interface PoolStateUpdateRequest {
+  action: 'pause' | 'resume' | 'cancel';
+  reason?: string;
+}
+
+export interface PoolStateUpdateResponse {
+  success: boolean;
+  message: string;
+}
