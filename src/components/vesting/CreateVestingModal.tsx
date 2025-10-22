@@ -109,6 +109,14 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
           allocationType: a.allocationType,
           allocationValue: a.allocationValue,
         })) : undefined,
+        rules: (currentMode === "snapshot" || currentMode === "dynamic") ? rules.map(r => ({
+          name: r.name,
+          nftContract: r.nftContract,
+          threshold: r.threshold,
+          allocationType: r.allocationType,
+          allocationValue: r.allocationValue,
+          enabled: r.enabled,
+        })) : undefined,
       });
       
       setValidation(validationResult);

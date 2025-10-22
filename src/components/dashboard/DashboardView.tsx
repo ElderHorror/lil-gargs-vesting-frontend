@@ -94,6 +94,7 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
   }>>([]);
   const [poolTotalAmount, setPoolTotalAmount] = useState(0);
   const [poolName, setPoolName] = useState("");
+  const [syncLoading, setSyncLoading] = useState(false);
 
   useEffect(() => {
     if (initialSummary) return;
@@ -334,6 +335,32 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
     }
   }
 
+  // Manually trigger sync for dynamic pool
+  async function syncDynamicPool() {
+    if (!selectedPoolId) {
+      setError("No pool selected");
+      return;
+    }
+
+    setSyncLoading(true);
+    setError(null);
+
+    try {
+      await api.post(`/pools/${selectedPoolId}/sync`, {});
+      alert("✅ Pool sync completed! Check the logs for details.");
+      
+      // Reload pool data
+      await loadActivePoolData();
+      await loadActivityLogs();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to sync pool";
+      setError(errorMsg);
+      alert(`❌ Sync failed: ${errorMsg}`);
+    } finally {
+      setSyncLoading(false);
+    }
+  }
+
   function refreshSummary() {
     // startTransition(async () => {
     (async () => {
@@ -513,13 +540,24 @@ export function DashboardView({ initialRules, initialSummary, initialMetrics }: 
                   </Button>
                 )}
                 {poolVestingMode === 'dynamic' && (
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    onClick={() => setAddRuleModalOpen(true)}
-                  >
-                    + Add New Rule
-                  </Button>
+                  <>
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      onClick={syncDynamicPool}
+                      loading={syncLoading}
+                      disabled={syncLoading}
+                    >
+                      🔄 Sync Now
+                    </Button>
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={() => setAddRuleModalOpen(true)}
+                    >
+                      + Add New Rule
+                    </Button>
+                  </>
                 )}
               </div>
               
