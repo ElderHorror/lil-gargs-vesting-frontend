@@ -31,6 +31,7 @@ export function VestingRewardsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<{ message: string; signature: string } | null>(null);
   const isInitialLoad = useRef(true);
+  const [showPools, setShowPools] = useState(true); // controls visibility of the pools list
 
   const loadPools = useCallback(async () => {
     if (!wallet) {
@@ -136,6 +137,14 @@ export function VestingRewardsPage() {
     
     return () => clearInterval(interval);
   }, [loadPools, loadHistory]);
+
+  // Default: collapse pool list on small screens, expand on larger screens
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isSmall = window.matchMedia('(max-width: 639px)').matches; // Tailwind sm breakpoint
+      setShowPools(!isSmall);
+    }
+  }, []);
 
   const { sendTransaction } = useWallet();
   const connection = useMemo(
@@ -340,14 +349,6 @@ export function VestingRewardsPage() {
     </div>
   );
 
-  const footer = (
-    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-xs text-white/40">
-      <p>
-        This dashboard is a prototype. Signature-based claiming will replace the test key
-        requirement in production. Connect your Phantom wallet to view your vesting rewards.
-      </p>
-    </div>
-  );
 
   const selectedPool = pools.find(p => p.poolId === selectedPoolId);
   const selectedSummary = selectedPoolId ? (summaries.get(selectedPoolId) ?? null) : null;
@@ -405,19 +406,40 @@ export function VestingRewardsPage() {
       
       {pools.length > 0 && (
         <div className="space-y-6">
-          {/* Pool Selector */}
-          {pools.length > 1 && (
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Available Vesting Pools</p>
+          {/* Header + toggle for list only */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Available Vesting Pools</p>
+            {pools.length > 1 && (
+              <button
+                onClick={() => setShowPools(!showPools)}
+                className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors"
+                aria-expanded={showPools}
+                aria-controls="pool-selector"
+              >
+                {showPools ? 'Hide' : 'Show'}
+                <svg
+                  className={`h-4 w-4 transition-transform ${showPools ? '' : 'rotate-180'}`}
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Collapsible pool selector (list only) */}
+          {pools.length > 1 && showPools && (
+            <div id="pool-selector" className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 {pools.map((pool) => {
                   const poolSummary = summaries.get(pool.poolId);
-                  const isPoolFullyClaimed = poolSummary ? 
+                  const isPoolFullyClaimed = poolSummary ?
                     poolSummary.balances.totalClaimed >= poolSummary.userShare.totalEligible &&
-                    poolSummary.vestingSchedule && 
+                    poolSummary.vestingSchedule &&
                     Date.now() / 1000 >= poolSummary.vestingSchedule.endTime : false;
                   const isSelected = pool.poolId === selectedPoolId;
-                  
+
                   return (
                     <button
                       key={pool.poolId}
@@ -431,6 +453,16 @@ export function VestingRewardsPage() {
                       {isPoolFullyClaimed && (
                         <div className="absolute -top-2 right-3 rounded-full bg-green-500 px-2 py-0.5 text-xs font-semibold text-white">
                           ✓ Fully Claimed
+                        </div>
+                      )}
+                      {poolSummary?.poolState === 'paused' && (
+                        <div className="absolute -top-2 right-3 rounded-full bg-yellow-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          Paused
+                        </div>
+                      )}
+                      {poolSummary?.poolState === 'cancelled' && (
+                        <div className="absolute -top-2 right-3 rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          Cancelled
                         </div>
                       )}
                       <div className="flex items-start justify-between">
@@ -462,8 +494,48 @@ export function VestingRewardsPage() {
               </div>
             </div>
           )}
-          
-          {/* Selected Pool Card */}
+
+          {/* Single pool view when only one pool exists */}
+          {pools.length === 1 && (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              {(() => {
+                const singlePool = pools[0];
+                const singlePoolSummary = summaries.get(singlePool.poolId);
+                return (
+                  <>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-white">{singlePool.poolName}</p>
+                        <p className="mt-1 text-xs text-white/50">
+                          {singlePool.vestingMode === 'dynamic' ? '🔄 Dynamic' : '📸 Snapshot'}
+                        </p>
+                      </div>
+                      {singlePoolSummary?.poolState === 'paused' && (
+                        <div className="rounded-full bg-yellow-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          Paused
+                        </div>
+                      )}
+                      {singlePoolSummary?.poolState === 'cancelled' && (
+                        <div className="rounded-full bg-red-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          Cancelled
+                        </div>
+                      )}
+                    </div>
+                    {singlePoolSummary && (
+                      <div className="mt-3 flex items-center justify-between text-xs">
+                        <span className="text-white/60">Claimable</span>
+                        <span className="font-semibold text-white">
+                          {singlePoolSummary.balances.unlocked.toLocaleString()} $GARG
+                        </span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Selected Pool Card - always visible */}
           {selectedPool && (
             <VestingRewardsCard
               wallet={wallet ?? ""}
