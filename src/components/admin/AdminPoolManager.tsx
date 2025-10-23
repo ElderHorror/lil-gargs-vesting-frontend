@@ -106,6 +106,12 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
 
   // Remove member from pool
   async function removeMember(member: PoolMember) {
+    // Prevent removing already cancelled members
+    if (member.is_cancelled) {
+      alert("This member has already been removed.");
+      return;
+    }
+    
     if (!confirm(`Are you sure you want to remove ${member.user_wallet} from the pool?`)) {
       return;
     }
@@ -154,6 +160,12 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
   }
 
   function handleEditMember(member: PoolMember) {
+    // Prevent editing cancelled members
+    if (member.is_cancelled) {
+      alert("Cannot edit a removed member.");
+      return;
+    }
+    
     setEditingMember(member);
     setNewAllocation(member.token_amount);
     setNewNftCount(member.nft_count);
@@ -315,20 +327,27 @@ export function AdminPoolManager({ poolId, poolName, poolState, onPoolStateChang
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex justify-end gap-2">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleEditMember(member)}
-                              >
-                                Edit
-                              </Button>
-                              <Button 
-                                variant="danger" 
-                                size="sm" 
-                                onClick={() => removeMember(member)}
-                              >
-                                Remove
-                              </Button>
+                              {!member.is_cancelled && (
+                                <>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => handleEditMember(member)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button 
+                                    variant="danger" 
+                                    size="sm" 
+                                    onClick={() => removeMember(member)}
+                                  >
+                                    Remove
+                                  </Button>
+                                </>
+                              )}
+                              {member.is_cancelled && (
+                                <span className="text-xs text-white/50 py-2">Removed</span>
+                              )}
                             </div>
                           </td>
                         </tr>
