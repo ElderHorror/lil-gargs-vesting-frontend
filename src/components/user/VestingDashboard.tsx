@@ -6,6 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { api } from "@/lib/api";
+import { CircularProgress } from "@/components/ui/CircularProgress";
 
 interface Pool {
   poolId: string;
@@ -37,7 +38,7 @@ interface ClaimHistoryItem {
   poolName: string;
 }
 
-type Tab = "overview" | "pools" | "history";
+type Tab = "overview" | "history";
 
 export function VestingDashboard() {
   const [wallet, setWallet] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export function VestingDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<{ message: string; signature: string } | null>(null);
   const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const isInitialLoad = useRef(true);
 
   const connection = useMemo(
@@ -140,6 +142,40 @@ export function VestingDashboard() {
       month: "short",
       year: "numeric",
     }).format(date);
+  };
+
+  const formatDateTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  };
+
+  // Helpers for breakdown UI
+  const poolStatusBadge = (status: string) => {
+    switch (status) {
+      case "active":
+        return { text: "Active", cls: "bg-green-500/15 text-green-400 border-green-500/30" };
+      case "paused":
+        return { text: "Paused", cls: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30" };
+      case "cancelled":
+        return { text: "Cancelled", cls: "bg-red-500/15 text-red-400 border-red-500/30" };
+      case "fully_vested":
+        return { text: "Fully Vested", cls: "bg-purple-500/15 text-purple-300 border-purple-500/30" };
+      default:
+        return { text: status, cls: "bg-white/10 text-white/80 border-white/20" };
+    }
+  };
+
+  const poolProgressPct = (p: Pool) => {
+    const total = (p.claimable ?? 0) + (p.locked ?? 0) + (p.claimed ?? 0);
+    if (total <= 0) return 0;
+    return ((p.claimed + p.claimable) / total) * 100;
   };
 
   // Skeleton loader component
@@ -262,16 +298,6 @@ export function VestingDashboard() {
               Overview
             </button>
             <button
-              onClick={() => setActiveTab("pools")}
-              className={`px-4 py-3 text-sm font-medium transition-colors ${
-                activeTab === "pools"
-                  ? "border-b-2 border-purple-500 text-white"
-                  : "text-white/60 hover:text-white"
-              }`}
-            >
-              Pools
-            </button>
-            <button
               onClick={() => setActiveTab("history")}
               className={`px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === "history"
@@ -295,15 +321,30 @@ export function VestingDashboard() {
                 <>
                   {/* Total Claimable Card */}
                   <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 p-6">
-                    <p className="text-sm text-white/60 mb-2">Total Claimable</p>
-                    <p className="text-4xl font-bold text-white mb-6">{formatNumber(summary.totalClaimable)} $GARG</p>
-                    <button
-                      onClick={() => setShowClaimModal(true)}
-                      className="w-full rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
-                      disabled={summary.totalClaimable <= 0}
-                    >
-                      Claim Rewards
-                    </button>
+                    <div className="flex items-center gap-6 flex-row">
+                      {/* Progress */}
+                      <div className="flex-shrink-0">
+                        <CircularProgress
+                          percentage={summary.vestedPercentage}
+                          label="Unlocked"
+                          size={140}
+                          strokeWidth={10}
+                        />
+                      </div>
+
+                      {/* Amount + Button */}
+                      <div className="flex-1 text-left">
+                        <p className="text-sm text-white/60 mb-2">Total Claimable</p>
+                        <p className="text-4xl font-bold text-white mb-4">{formatNumber(summary.totalClaimable)} $GARG</p>
+                        <button
+                          onClick={() => setShowClaimModal(true)}
+                          className="rounded-lg bg-purple-600 px-4 py-3 font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+                          disabled={summary.totalClaimable <= 0}
+                        >
+                          Claim Rewards
+                        </button>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Summary Stats */}
@@ -324,95 +365,124 @@ export function VestingDashboard() {
                       <span className="text-white/60">Time to Full Unlock</span>
                       <span className="font-semibold">{formatCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000))}</span>
                     </div>
+                    {/* Breakdown Toggle */}
+                    <button
+                      onClick={() => setShowBreakdown((v) => !v)}
+                      className="mt-2 flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200"
+                    >
+                      <span>{showBreakdown ? "Hide Breakdown" : "View Breakdown"}</span>
+                      <svg className={`h-4 w-4 transition-transform ${showBreakdown ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                    {showBreakdown && (
+                      <div className="mt-3 space-y-2">
+                        {summary.pools
+                          .filter((p) => p.status === 'active' || p.claimable > 0 || p.status === 'paused')
+                          .map((pool) => {
+                            // derive status
+                            const isFullyVested = (pool.locked ?? 0) <= 0 && ((pool.claimed ?? 0) + (pool.claimable ?? 0)) > 0;
+                            const derivedStatus = isFullyVested ? 'fully_vested' : pool.status === 'active' ? 'active' : pool.status;
+                            const badge = poolStatusBadge(derivedStatus);
+                            const progress = poolProgressPct(pool);
+                            const awaiting = pool.claimable > 0 && !isFullyVested;
+                            return (
+                              <div key={pool.poolId} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                                {/* Left pill with pool name and claimable */}
+                                <div className="flex items-start gap-3">
+                                  <div className={`px-3 py-2 rounded-lg border ${badge.cls}`}>
+                                    <div className="text-xs font-semibold">{badge.text}</div>
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-white">{pool.poolName}</p>
+                                    <p className="text-xs text-white/60">Claimable: <span className="text-white font-semibold">{formatNumber(pool.claimable)} GARG</span></p>
+                                  </div>
+                                </div>
+
+                                {/* Right column: status + progress */}
+                                <div className="text-right">
+                                  <p className="text-white font-semibold">{awaiting ? 'Awaiting Claim' : badge.text}</p>
+                                  <div className="text-xs text-white/60">Progress: {progress.toFixed(0)}%</div>
+                                  {derivedStatus === 'active' && (
+                                    <div className="text-xs text-white/50">Time to Unlock: {formatCountdown(Math.max(0, summary.nextUnlockTime - Math.floor(Date.now()/1000)))}</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        <p className="text-xs text-white/40">Only active and unclaimed pools are displayed here.</p>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
             </div>
           )}
 
-          {/* Pools Tab */}
-          {activeTab === "pools" && (
-            <div className="space-y-3">
-              {loading ? (
-                <>
-                  <SkeletonLoader height="h-32" />
-                  <SkeletonLoader height="h-32" />
-                  <SkeletonLoader height="h-32" />
-                </>
-              ) : (
-                summary.pools.map((pool) => (
-                  <div key={pool.poolId} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="font-semibold text-white">{pool.poolName}</p>
-                        <p className="text-xs text-white/50 mt-1">
-                          {pool.status === 'active' ? '✓ Active' : pool.status === 'paused' ? '⏸ Paused' : '✗ Cancelled'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-white">{formatNumber(pool.claimable)} $GARG</p>
-                        <p className="text-xs text-white/50">Claimable</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <p className="text-white/60">Locked</p>
-                        <p className="font-semibold text-white">{formatNumber(pool.locked)} $GARG</p>
-                      </div>
-                      <div>
-                        <p className="text-white/60">Share</p>
-                        <p className="font-semibold text-white">{pool.share.toFixed(2)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-white/60">NFTs Held</p>
-                        <p className="font-semibold text-white">{pool.nftCount}</p>
-                      </div>
-                      <div>
-                        <p className="text-white/60">Claimed</p>
-                        <p className="font-semibold text-white">{formatNumber(pool.claimed)} $GARG</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
 
           {/* History Tab */}
           {activeTab === "history" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {loading ? (
                 <>
-                  <SkeletonLoader height="h-20" />
-                  <SkeletonLoader height="h-20" />
-                  <SkeletonLoader height="h-20" />
+                  <SkeletonLoader height="h-24" />
+                  <SkeletonLoader height="h-24" />
+                  <SkeletonLoader height="h-24" />
                 </>
-              ) : history.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-white/60">
-                  <p>No claim history yet</p>
-                </div>
               ) : (
-                history.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-semibold text-white">{formatNumber(item.amount)} $GARG</p>
-                        <p className="text-xs text-white/50 mt-1">{item.poolName}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-white/60">{formatDate(item.date)}</p>
-                        <a
-                          href={`https://solscan.io/tx/${item.transactionSignature}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-purple-400 hover:text-purple-300 mt-1 inline-block"
-                        >
-                          View Tx →
-                        </a>
-                      </div>
-                    </div>
+                <>
+                  {/* Past Vesting Pools */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white/80">Past Vesting Pools</h3>
+                    {(() => {
+                      const completed = summary.pools.filter((p) => (p.locked ?? 0) <= 0 && (p.claimed ?? 0) > 0);
+                      if (completed.length === 0) {
+                        return (
+                          <p className="text-xs text-white/50">No completed pools yet.</p>
+                        );
+                      }
+                      return completed.map((p) => (
+                        <div key={p.poolId} className="rounded-2xl bg-white/5 border border-white/10 p-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="font-semibold text-white">{p.poolName}</p>
+                              <p className="text-xs text-white/60 mt-1">Claimed: <span className="text-white font-semibold">{formatNumber(p.claimed)} $GARG</span></p>
+                            </div>
+                            <div className="flex items-center gap-2 text-green-400">
+                              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                              <span className="text-sm font-semibold">Completed</span>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
                   </div>
-                ))
+
+                  {/* Claim Transactions */}
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white/80">Claim Transactions</h3>
+                    {history.length === 0 ? (
+                      <p className="text-xs text-white/50">No claim transactions yet.</p>
+                    ) : (
+                      history.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
+                          <div className="text-white font-semibold">+{formatNumber(item.amount)} $GARG</div>
+                          <div className="text-right">
+                            <div className="text-xs text-white/60">{formatDateTime(item.date)}</div>
+                            <a
+                              href={`https://solscan.io/tx/${item.transactionSignature}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-purple-400 hover:text-purple-300"
+                            >
+                              View Tx →
+                            </a>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -596,17 +666,7 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
               </div>
             )}
 
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
-              <p className="text-xs text-white/60">Pool Breakdown</p>
-              {summary.pools.map((pool) => (
-                <div key={pool.poolId} className="flex justify-between text-xs">
-                  <span className="text-white/80">{pool.poolName}</span>
-                  <span className="font-semibold text-white">
-                    {amount ? ((parseFloat(amount) / summary.totalClaimable) * pool.claimable).toFixed(2) : "0.00"} $GARG
-                  </span>
-                </div>
-              ))}
-            </div>
+            {/* Removed per redesign: no breakdown needed in the withdrawal modal */}
 
             <div className="flex gap-3">
               <button

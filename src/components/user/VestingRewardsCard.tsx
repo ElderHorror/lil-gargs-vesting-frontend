@@ -2,6 +2,7 @@
 
 import { ReactNode, useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import { CircularProgress } from "@/components/ui/CircularProgress";
 // import { cn } from "@/lib/utils";
 import { formatTokenAmount } from "@/lib/formatters";
 
@@ -304,49 +305,51 @@ export function VestingRewardsCard({
                 </div>
               </section>
 
-              <section className="rounded-2xl bg-white/5 p-4">
-                <div className="grid gap-4 text-sm">
-                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
-                    <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-[0.3em] text-white/50">Unlocked Balance</p>
-                      <p className="text-base font-semibold text-white">{formatToken(liveUnlockedBalance)} GARG</p>
-                    </div>
-                    <div className="text-right text-xs text-white/40">
-                      Previously claimed: {formatToken(summary.balances.totalClaimed)}
-                    </div>
+              <section className="rounded-2xl bg-white/5 p-6">
+                {/* Circular Progress + Total Claimable + Claim Button */}
+                <div className="flex flex-col sm:flex-row items-center gap-6 mb-6">
+                  {/* Circular Progress */}
+                  <div className="flex-shrink-0">
+                    <CircularProgress
+                      percentage={liveVestedPercentage}
+                      label="Unlocked"
+                      size={140}
+                      strokeWidth={10}
+                    />
                   </div>
-                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-white/50">Locked Balance</p>
-                      <p className="text-base font-semibold text-white">{formatToken(summary.userShare.totalEligible - liveUnlockedBalance - summary.balances.totalClaimed)} GARG</p>
-                    </div>
-                    <div className="text-right text-xs text-white/40">
-                      NFT Tier {summary.tier} · {summary.nftCount} NFT{summary.nftCount === 1 ? "" : "s"}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-white/50">Next Unlock</p>
-                      <p className="text-base font-semibold text-white">{formatCountdown(liveCountdownSeconds)}</p>
-                    </div>
-                    <div className="text-right text-xs text-white/40">
-                      Unlocks at {formatDate(new Date(summary.nextUnlock.timestamp * 1000).toISOString())}
-                    </div>
+
+                  {/* Total Claimable + Button */}
+                  <div className="flex-1 text-center sm:text-left">
+                    <p className="text-xs uppercase tracking-[0.3em] text-white/50 mb-2">Total Claimable</p>
+                    <p className="text-4xl font-bold text-white mb-4">{formatToken(liveUnlockedBalance)} <span className="text-2xl">$GARG</span></p>
+                    <Button
+                      size="lg"
+                      className="w-full sm:w-auto text-sm font-semibold"
+                      loading={claimLoading}
+                      onClick={() => onClaim(poolId)}
+                      disabled={!canClaim || claimLoading || summary.poolState === 'paused' || summary.poolState === 'cancelled'}
+                    >
+                      {summary.poolState === 'paused' ? 'Pool Paused - Claims Disabled' : 
+                       summary.poolState === 'cancelled' ? 'Pool Cancelled - No Claims' : 
+                       'Claim Rewards'}
+                    </Button>
                   </div>
                 </div>
 
-                <div className="mt-6">
-                  <Button
-                    size="lg"
-                    className="w-full text-sm font-semibold"
-                    loading={claimLoading}
-                    onClick={() => onClaim(poolId)}
-                    disabled={!canClaim || claimLoading || summary.poolState === 'paused' || summary.poolState === 'cancelled'}
-                  >
-                    {summary.poolState === 'paused' ? 'Pool Paused - Claims Disabled' : 
-                     summary.poolState === 'cancelled' ? 'Pool Cancelled - No Claims' : 
-                     'Claim Unlocked $GARG'}
-                  </Button>
+                {/* Stats Grid */}
+                <div className="grid gap-3 text-sm border-t border-white/10 pt-6">
+                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.3em] text-white/50">Total Locked</span>
+                    <span className="font-semibold text-white">{formatToken(summary.userShare.totalEligible - liveUnlockedBalance - summary.balances.totalClaimed)} $GARG</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.3em] text-white/50">Total Claimed</span>
+                    <span className="font-semibold text-white">{formatToken(summary.balances.totalClaimed)} $GARG</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
+                    <span className="text-xs uppercase tracking-[0.3em] text-white/50">Time to Next Unlock</span>
+                    <span className="font-semibold text-white">{formatCountdown(liveCountdownSeconds)}</span>
+                  </div>
                 </div>
               </section>
             </div>
