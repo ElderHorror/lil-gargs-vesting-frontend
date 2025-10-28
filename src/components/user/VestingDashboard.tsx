@@ -152,15 +152,6 @@ export function VestingDashboard() {
     return `${days}d ${hours}h`;
   };
 
-  const formatDate = (value: string) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return new Intl.DateTimeFormat("en-US", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(date);
-  };
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -549,7 +540,6 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
   const [loading, setLoading] = useState(false);
   const [claimStep, setClaimStep] = useState<"input" | "processing" | "confirming">("input");
   const [error, setError] = useState<string | null>(null);
-  const { sendTransaction } = useWallet();
 
   const handleQuickAmount = (percentage: number) => {
     const value = (summary.totalClaimable * percentage) / 100;

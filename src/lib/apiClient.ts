@@ -38,7 +38,7 @@ interface RequestMetrics {
 const API_BASE = "http://localhost:3001/api";
 
 // In-memory cache
-const cache = new Map<string, CacheEntry<any>>();
+const cache = new Map<string, CacheEntry<unknown>>();
 
 // Request metrics for monitoring
 const metrics: RequestMetrics[] = [];

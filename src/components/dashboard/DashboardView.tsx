@@ -21,8 +21,6 @@ import type {
 import { api } from "@/lib/api";
 // import { cn } from "@/lib/utils";
 import { formatTokenAmount } from "@/lib/formatters";
-import { cn } from "@/lib/utils";
-
 type DashboardViewProps = {
   initialRules: SnapshotRule[];
   initialSummary: SnapshotSummaryResponse | null;
