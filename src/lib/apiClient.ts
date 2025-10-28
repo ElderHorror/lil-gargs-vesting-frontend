@@ -35,7 +35,9 @@ interface RequestMetrics {
   timestamp: number;
 }
 
-const API_BASE = "https://lil-gargs-vesting-backend.onrender.com/api";
+const API_BASE = process.env.NODE_ENV === "development"
+  ? "http://localhost:3001/api"
+  : "https://lil-gargs-vesting-backend.onrender.com/api";
 
 // In-memory cache
 const cache = new Map<string, CacheEntry<unknown>>();
@@ -237,7 +239,12 @@ async function request<T>(
           return result;
         }
 
-        const data = (await res.json()) as T;
+        const response = await res.json() as { success?: boolean; data?: T } | T;
+        
+        // Unwrap data if response has { success, data } structure
+        const data = (response && typeof response === 'object' && 'data' in response && 'success' in response)
+          ? (response as { success: boolean; data: T }).data
+          : response as T;
 
         // Cache successful response
         if (cacheMode !== "no-store" && cacheKey) {
