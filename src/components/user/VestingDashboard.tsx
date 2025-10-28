@@ -5,8 +5,9 @@ import Image from "next/image";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
 import { WalletConnectButton } from "./WalletConnectButton";
-import { api } from "@/lib/api";
+import { apiClient } from "@/lib/apiClient";
 import { CircularProgress } from "@/components/ui/CircularProgress";
+import { RetryPrompt } from "@/components/ui/RetryPrompt";
 
 interface Pool {
   poolId: string;
@@ -46,7 +47,8 @@ export function VestingDashboard() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [history, setHistory] = useState<ClaimHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [successToast, setSuccessToast] = useState<{ message: string; signature: string } | null>(null);
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -67,14 +69,22 @@ export function VestingDashboard() {
     setError(null);
 
     try {
-      const response = await api.get<{ success: boolean; data: SummaryData }>(
-        `/user/vesting/summary-all?wallet=${wallet}`
+      const response = await apiClient.get<SummaryData>(
+        `/user/vesting/summary-all?wallet=${wallet}`,
+        {
+          timeout: 30000,
+          retries: 3,
+          retryDelay: 1000,
+          cacheKey: `vesting-summary-${wallet}`,
+          cacheDuration: 5 * 60 * 1000, // 5 minutes
+        }
       );
-      setSummary(response.data);
+      setSummary(response);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      if (!errorMessage.includes('404')) {
-        setError(err instanceof Error ? err.message : "Failed to load summary");
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (!error.message.includes('404')) {
+        setError(error);
+        setRetryCount(0);
       }
       setSummary(null);
     } finally {
@@ -89,14 +99,22 @@ export function VestingDashboard() {
     }
 
     try {
-      const response = await api.get<{ success: boolean; data: ClaimHistoryItem[] }>(
-        `/user/vesting/claim-history?wallet=${wallet}`
+      const response = await apiClient.get<ClaimHistoryItem[]>(
+        `/user/vesting/claim-history?wallet=${wallet}`,
+        {
+          timeout: 30000,
+          retries: 3,
+          retryDelay: 1000,
+          cacheKey: `claim-history-${wallet}`,
+          cacheDuration: 1 * 60 * 1000, // 1 minute
+        }
       );
-      setHistory(response.data ?? []);
+      setHistory(response ?? []);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '';
-      if (!errorMessage.includes('404')) {
-        setError(err instanceof Error ? err.message : "Failed to load history");
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (!error.message.includes('404')) {
+        setError(error);
+        setRetryCount(0);
       }
       setHistory([]);
     }
@@ -254,8 +272,18 @@ export function VestingDashboard() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
-          {error}
+        <div className="mb-6">
+          <RetryPrompt
+            error={error}
+            retrying={loading}
+            retryCount={retryCount}
+            onRetry={() => {
+              setRetryCount(prev => prev + 1);
+              void loadSummary();
+              void loadHistory();
+            }}
+            onDismiss={() => setError(null)}
+          />
         </div>
       )}
 
@@ -546,27 +574,24 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
 
     try {
       setClaimStep("processing");
-      const response = await api.post<{
-        success: boolean;
-        data: {
-          totalAmountClaimed: number;
-          poolBreakdown: Array<{ poolId: string; poolName: string; amountToClaim: number }>;
-          transactionSignature: string;
-        };
+      const response = await apiClient.post<{
+        totalAmountClaimed: number;
+        poolBreakdown: Array<{ poolId: string; poolName: string; amountToClaim: number }>;
+        transactionSignature: string;
       }>("/user/vesting/claim-all", {
         userWallet: wallet,
         amountToClaim: claimAmount,
+      }, {
+        timeout: 60000, // Longer timeout for claims
+        retries: 3,
+        retryDelay: 1000,
       });
-
-      if (!response.success) {
-        throw new Error("Claim failed");
-      }
 
       setClaimStep("confirming");
       
       onSuccess(
         `Successfully claimed ${claimAmount.toLocaleString()} $GARG`,
-        response.data.transactionSignature
+        response.transactionSignature
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to claim rewards");
