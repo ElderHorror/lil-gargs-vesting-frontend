@@ -27,7 +27,7 @@ interface SummaryData {
   totalVested: number;
   vestedPercentage: number;
   nextUnlockTime: number;
-  pools: Pool[];
+  pools?: Pool[];
 }
 
 interface ClaimHistoryItem {
@@ -286,7 +286,7 @@ export function VestingDashboard() {
       )}
 
       {/* No Pools */}
-      {wallet && !loading && summary && summary.pools.length === 0 && (
+      {wallet && !loading && summary && (!summary.pools || summary.pools.length === 0) && (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-white/60">
           <p>No active vesting pools found for this wallet.</p>
         </div>
@@ -302,7 +302,7 @@ export function VestingDashboard() {
       )}
 
       {/* Main Content */}
-      {wallet && summary && summary.pools.length > 0 && (
+      {wallet && summary && summary.pools && summary.pools.length > 0 && (
         <div className="space-y-6">
           {/* Tab Navigation */}
           <div className="flex gap-2 border-b border-white/10">
@@ -394,7 +394,7 @@ export function VestingDashboard() {
                         <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
                       </svg>
                     </button>
-                    {showBreakdown && (
+                    {showBreakdown && summary.pools && (
                       <div className="mt-3 space-y-2">
                         {summary.pools
                           .filter((p) => p.status === 'active' || p.claimable > 0 || p.status === 'paused')
@@ -454,7 +454,7 @@ export function VestingDashboard() {
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-white/80">Past Vesting Pools</h3>
                     {(() => {
-                      const completed = summary.pools.filter((p) => (p.locked ?? 0) <= 0 && (p.claimed ?? 0) > 0);
+                      const completed = (summary.pools ?? []).filter((p) => (p.locked ?? 0) <= 0 && (p.claimed ?? 0) > 0);
                       if (completed.length === 0) {
                         return (
                           <p className="text-xs text-white/50">No completed pools yet.</p>
