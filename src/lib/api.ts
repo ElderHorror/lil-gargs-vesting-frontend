@@ -1,5 +1,5 @@
 const API_BASE = "https://lil-gargs-vesting-backend.onrender.com/api";
-// changed
+// changed some things
 
 interface RequestOptions extends RequestInit {
   json?: unknown;
