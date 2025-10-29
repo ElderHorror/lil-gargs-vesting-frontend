@@ -52,12 +52,30 @@ export function VestingDashboard() {
   const [successToast, setSuccessToast] = useState<{ message: string; signature: string } | null>(null);
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isInitialLoad = useRef(true);
 
   const connection = useMemo(
     () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
     []
   );
+
+  // Add event listener for refresh-summary event
+  useEffect(() => {
+    const handleRefreshSummary = () => {
+      void loadSummary();
+    };
+
+    window.addEventListener('refresh-summary', handleRefreshSummary);
+    return () => {
+      window.removeEventListener('refresh-summary', handleRefreshSummary);
+      // Clear cache when component unmounts
+      if (wallet) {
+        apiClient.clearCache(`vesting-summary-${wallet}`);
+        apiClient.clearCache(`claim-history-${wallet}`);
+      }
+    };
+  }, [loadSummary, wallet]);
 
   const loadSummary = useCallback(async () => {
     if (!wallet) {
@@ -76,10 +94,11 @@ export function VestingDashboard() {
           retries: 3,
           retryDelay: 1000,
           cacheKey: `vesting-summary-${wallet}`,
-          cacheDuration: 5 * 60 * 1000, // 5 minutes
+          cacheDuration: 1 * 60 * 1000, // 1 minute
         }
       );
       setSummary(response);
+      setLastUpdated(new Date());
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!error.message.includes('404')) {
@@ -120,9 +139,14 @@ export function VestingDashboard() {
     }
   }, [wallet]);
 
+  const loadHistoryWithTimestamp = useCallback(async () => {
+    await loadHistory();
+    setLastUpdated(new Date());
+  }, [loadHistory]);
+
   useEffect(() => {
     void loadSummary();
-    void loadHistory();
+    void loadHistoryWithTimestamp();
 
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -131,15 +155,22 @@ export function VestingDashboard() {
     }, 60000);
 
     return () => clearInterval(interval);
-  }, [loadSummary, loadHistory]);
+  }, [loadSummary, loadHistory, loadHistoryWithTimestamp]);
 
   const handleWalletChange = useCallback((newWallet: string | null) => {
+    // Clear cache for previous wallet
+    if (wallet) {
+      apiClient.clearCache(`vesting-summary-${wallet}`);
+      apiClient.clearCache(`claim-history-${wallet}`);
+    }
+    
     setWallet(newWallet);
     setSummary(null);
     setHistory([]);
     setError(null);
+    setLastUpdated(null);
     isInitialLoad.current = true;
-  }, []);
+  }, [wallet]);
 
   const formatNumber = (num: number) => {
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -243,18 +274,21 @@ export function VestingDashboard() {
           </div>
           <div className="flex items-center gap-2">
             {wallet && (
-              <button
-                onClick={() => {
-                  void loadSummary();
-                  void loadHistory();
-                }}
-                disabled={loading}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 disabled:opacity-50"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    void loadSummary();
+                    void loadHistoryWithTimestamp();
+                  }}
+                  disabled={loading}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 disabled:opacity-50"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                <span className="text-xs text-white/40">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}</span>
+              </div>
             )}
             <WalletConnectButton onWalletChange={handleWalletChange} />
           </div>
@@ -512,11 +546,18 @@ export function VestingDashboard() {
       {showClaimModal && summary && (
         <ClaimModal
           summary={summary}
-          onClose={() => setShowClaimModal(false)}
+          onClose={() => {
+            setShowClaimModal(false);
+            // Clear any existing error when closing the modal
+            // The error will be cleared in the ClaimModal component when it mounts
+          }}
           onSuccess={(message, signature) => {
             setSuccessToast({ message, signature });
+            // Clear cache after successful claim
+            apiClient.clearCache(`vesting-summary-${wallet}`);
+            apiClient.clearCache(`claim-history-${wallet}`);
             void loadSummary();
-            void loadHistory();
+            void loadHistoryWithTimestamp();
             setShowClaimModal(false);
           }}
           wallet={wallet || ""}
@@ -541,6 +582,11 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
   const [claimStep, setClaimStep] = useState<"input" | "processing" | "confirming">("input");
   const [error, setError] = useState<string | null>(null);
 
+  // Clear error when component mounts
+  useEffect(() => {
+    setError(null);
+  }, []);
+
   const handleQuickAmount = (percentage: number) => {
     const value = (summary.totalClaimable * percentage) / 100;
     setAmount(value.toFixed(2));
@@ -557,6 +603,10 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
       setError(`Amount exceeds available balance of ${summary.totalClaimable.toFixed(2)}`);
       return;
     }
+
+    // Clear cache before making the claim to ensure we have fresh data
+    apiClient.clearCache(`vesting-summary-${wallet}`);
+    apiClient.clearCache(`claim-history-${wallet}`);
 
     setLoading(true);
     setError(null);
@@ -583,7 +633,16 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
         response.transactionSignature
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to claim rewards");
+      if (err instanceof Error) {
+        // Check if this is a specific available balance error from the backend
+        if (err.message.includes('exceeds available balance')) {
+          setError(err.message);
+        } else {
+          setError(`Failed to claim rewards: ${err.message}`);
+        }
+      } else {
+        setError("Failed to claim rewards");
+      }
       setClaimStep("input");
     } finally {
       setLoading(false);
@@ -674,13 +733,28 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
               </button>
             </div>
 
-            {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                {error}
-              </div>
-            )}
 
             {/* Removed per redesign: no breakdown needed in the withdrawal modal */}
+
+            {error && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="flex-1">{error}</span>
+                  {error.includes('exceeds available balance') && (
+                    <button 
+                      onClick={() => {
+                        setError(null);
+                        // Refresh the summary data
+                        window.dispatchEvent(new CustomEvent('refresh-summary'));
+                      }}
+                      className="text-xs underline hover:text-red-300 whitespace-nowrap"
+                    >
+                      Refresh balance
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button
