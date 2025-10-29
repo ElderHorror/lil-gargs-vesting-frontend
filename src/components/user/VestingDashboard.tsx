@@ -431,16 +431,18 @@ export function VestingDashboard() {
                     {showBreakdown && summary.pools && (
                       <div className="mt-3 space-y-2">
                         {summary.pools
-                          .filter((p) => p.status === 'active' || p.claimable > 0 || p.status === 'paused')
+                          .filter((p) => p.status === 'active' || p.claimable > 0 || p.status === 'paused' || p.status === 'cancelled')
                           .map((pool) => {
                             // derive status
                             const isFullyVested = (pool.locked ?? 0) <= 0 && ((pool.claimed ?? 0) + (pool.claimable ?? 0)) > 0;
                             const derivedStatus = isFullyVested ? 'fully_vested' : pool.status === 'active' ? 'active' : pool.status;
                             const badge = poolStatusBadge(derivedStatus);
                             const progress = poolProgressPct(pool);
-                            const awaiting = pool.claimable > 0 && !isFullyVested;
+                            const isClaimable = pool.status === 'active' && pool.claimable > 0;
+                            const awaiting = isClaimable && !isFullyVested;
+                            const isDisabled = pool.status === 'paused' || pool.status === 'cancelled';
                             return (
-                              <div key={pool.poolId} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+                              <div key={pool.poolId} className={`flex items-center justify-between rounded-xl border p-3 text-sm ${isDisabled ? 'border-white/5 bg-white/2 opacity-60' : 'border-white/10 bg-white/5'}`}>
                                 {/* Left pill with pool name and claimable */}
                                 <div className="flex items-start gap-3">
                                   <div className={`px-3 py-2 rounded-lg border ${badge.cls}`}>
@@ -448,7 +450,8 @@ export function VestingDashboard() {
                                   </div>
                                   <div>
                                     <p className="font-semibold text-white">{pool.poolName}</p>
-                                    <p className="text-xs text-white/60">Claimable: <span className="text-white font-semibold">{formatNumber(pool.claimable)} GARG</span></p>
+                                    <p className="text-xs text-white/60">Claimable: <span className={`font-semibold ${isDisabled ? 'text-white/40' : 'text-white'}`}>{formatNumber(pool.claimable)} GARG</span></p>
+                                    {isDisabled && <p className="text-xs text-yellow-400/70 mt-1">Cannot claim from {pool.status} pool</p>}
                                   </div>
                                 </div>
 
@@ -456,14 +459,14 @@ export function VestingDashboard() {
                                 <div className="text-right">
                                   <p className="text-white font-semibold">{awaiting ? 'Awaiting Claim' : badge.text}</p>
                                   <div className="text-xs text-white/60">Progress: {progress.toFixed(0)}%</div>
-                                  {derivedStatus === 'active' && (
+                                  {derivedStatus === 'active' && !isDisabled && (
                                     <div className="text-xs text-white/50">Time to Unlock: {formatCountdown(Math.max(0, summary.nextUnlockTime - Math.floor(Date.now()/1000)))}</div>
                                   )}
                                 </div>
                               </div>
                             );
                           })}
-                        <p className="text-xs text-white/40">Only active and unclaimed pools are displayed here.</p>
+                        <p className="text-xs text-white/40">Only active pools contribute to your claimable balance. Paused and cancelled pools are shown for reference.</p>
                       </div>
                     )}
                   </div>
