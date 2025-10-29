@@ -37,7 +37,7 @@ interface RequestMetrics {
 
 const API_BASE = process.env.NODE_ENV === "development"
   ? "http://localhost:3001/api"
-  : "https://lil-gargs-vesting-backend.onrender.com/api";
+  : "https://lil-gargs-vesting-backend-1.onrender.com/api";
 
 // In-memory cache
 const cache = new Map<string, CacheEntry<unknown>>();

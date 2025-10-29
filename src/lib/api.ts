@@ -1,4 +1,4 @@
-const API_BASE = "https://lil-gargs-vesting-backend.onrender.com/api";
+const API_BASE = "https://lil-gargs-vesting-backend-1.onrender.com/api";
 // changed some things
 
 interface RequestOptions extends RequestInit {

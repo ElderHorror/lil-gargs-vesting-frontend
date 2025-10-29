@@ -572,13 +572,12 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
         userWallet: wallet,
         amountToClaim: claimAmount,
       }, {
-        timeout: 60000, // Longer timeout for claims
-        retries: 3,
-        retryDelay: 1000,
+        timeout: 30000, // Reduced from 60s for faster feedback
+        retries: 1, // Reduced from 3 for faster failure detection
+        retryDelay: 500, // Reduced from 1000ms
       });
 
-      setClaimStep("confirming");
-      
+      // Skip confirming step and go straight to success for faster UX
       onSuccess(
         `Successfully claimed ${claimAmount.toLocaleString()} $GARG`,
         response.transactionSignature
