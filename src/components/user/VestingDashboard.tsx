@@ -521,18 +521,34 @@ export function VestingDashboard() {
                       <p className="text-xs text-white/50">No claim transactions yet.</p>
                     ) : (
                       history.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
-                          <div className="text-white font-semibold">+{formatNumber(item.amount)} $GARG</div>
-                          <div className="text-right">
-                            <div className="text-xs text-white/60">{formatDateTime(item.date)}</div>
-                            <a
-                              href={`https://solscan.io/tx/${item.transactionSignature}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-purple-400 hover:text-purple-300"
-                            >
-                              View Tx →
-                            </a>
+                        <div key={item.id} className="rounded-2xl bg-white/5 border border-white/10 p-4 hover:bg-white/8 transition-colors">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-500/20">
+                                  <svg className="h-3.5 w-3.5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                                <span className="text-xs font-semibold text-green-400">Claimed</span>
+                              </div>
+                              <p className="text-lg font-bold text-white mb-1">+{formatNumber(item.amount)} $GARG</p>
+                              <p className="text-xs text-white/60">{item.poolName}</p>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-white/60 mb-2">{formatDateTime(item.date)}</div>
+                              <a
+                                href={`https://solscan.io/tx/${item.transactionSignature}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded-lg border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-xs text-purple-400 hover:bg-purple-500/20 transition-colors"
+                              >
+                                View Tx
+                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4m-4-4l4-4m0 0l-4 4m4-4v12" />
+                                </svg>
+                              </a>
+                            </div>
                           </div>
                         </div>
                       ))
