@@ -59,24 +59,6 @@ export function VestingDashboard() {
     () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
     []
   );
-
-  // Add event listener for refresh-summary event
-  useEffect(() => {
-    const handleRefreshSummary = () => {
-      void loadSummary();
-    };
-
-    window.addEventListener('refresh-summary', handleRefreshSummary);
-    return () => {
-      window.removeEventListener('refresh-summary', handleRefreshSummary);
-      // Clear cache when component unmounts
-      if (wallet) {
-        apiClient.clearCache(`vesting-summary-${wallet}`);
-        apiClient.clearCache(`claim-history-${wallet}`);
-      }
-    };
-  }, [loadSummary, wallet]);
-
   const loadSummary = useCallback(async () => {
     if (!wallet) {
       setSummary(null);
@@ -143,6 +125,23 @@ export function VestingDashboard() {
     await loadHistory();
     setLastUpdated(new Date());
   }, [loadHistory]);
+
+  // Add event listener for refresh-summary event
+  useEffect(() => {
+    const handleRefreshSummary = () => {
+      void loadSummary();
+    };
+
+    window.addEventListener('refresh-summary', handleRefreshSummary);
+    return () => {
+      window.removeEventListener('refresh-summary', handleRefreshSummary);
+      // Clear cache when component unmounts
+      if (wallet) {
+        apiClient.clearCache(`vesting-summary-${wallet}`);
+        apiClient.clearCache(`claim-history-${wallet}`);
+      }
+    };
+  }, [loadSummary, wallet]);
 
   useEffect(() => {
     void loadSummary();
