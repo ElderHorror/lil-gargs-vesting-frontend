@@ -408,7 +408,10 @@ export function VestingRewardsPage() {
         <div className="space-y-6">
           {/* Header + toggle for list only */}
           <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">Available Vesting Pools</p>
+            <div className="flex-1">
+              <p className="text-xs uppercase tracking-[0.3em] text-white/50">Active Vesting Pools</p>
+              <p className="mt-1 text-xs text-white/40">Completed pools appear in your claim history</p>
+            </div>
             {pools.length > 1 && (
               <button
                 onClick={() => setShowPools(!showPools)}
@@ -432,7 +435,17 @@ export function VestingRewardsPage() {
           {pools.length > 1 && showPools && (
             <div id="pool-selector" className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                {pools.map((pool) => {
+                {pools
+                  .filter((pool) => {
+                    const poolSummary = summaries.get(pool.poolId);
+                    // Show only pools that are NOT fully vested AND fully claimed
+                    const isPoolFullyClaimed = poolSummary ?
+                      poolSummary.balances.totalClaimed >= poolSummary.userShare.totalEligible &&
+                      poolSummary.vestingSchedule &&
+                      Date.now() / 1000 >= poolSummary.vestingSchedule.endTime : false;
+                    return !isPoolFullyClaimed;
+                  })
+                  .map((pool) => {
                   const poolSummary = summaries.get(pool.poolId);
                   const isPoolFullyClaimed = poolSummary ?
                     poolSummary.balances.totalClaimed >= poolSummary.userShare.totalEligible &&
