@@ -247,38 +247,43 @@ export function VestingDashboard() {
 
       {/* Header */}
       <div className="mb-8 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        {/* Top row: Logo + Title on left, Wallet on right */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <Image 
               src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg" 
               alt="Lil Gargs" 
               width={48}
               height={48}
-              className="h-12 w-12 rounded-full border-2 border-purple-500/50"
+              className="h-12 w-12 shrink-0 rounded-full border-2 border-purple-500/50"
             />
-            <h1 className="text-2xl font-bold">Lil Gargs Vesting</h1>
+            <h1 className="text-xl sm:text-2xl font-bold truncate">Lil Gargs Vesting</h1>
           </div>
-          <div className="flex items-center gap-2">
-            {wallet && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    void loadSummary();
-                    void loadHistoryWithTimestamp();
-                  }}
-                  disabled={loading}
-                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 disabled:opacity-50"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                </button>
-                <span className="text-xs text-white/40">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}</span>
-              </div>
-            )}
+          <div className="flex shrink-0">
             <WalletConnectButton onWalletChange={handleWalletChange} />
           </div>
         </div>
+
+        {/* Bottom row: Last updated + Refresh button */}
+        {wallet && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <span className="text-xs text-white/40">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}</span>
+            <button
+              onClick={() => {
+                void loadSummary();
+                void loadHistoryWithTimestamp();
+              }}
+              disabled={loading}
+              className="w-full sm:w-auto rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 disabled:opacity-50 flex items-center justify-center gap-2"
+              title="Refresh data"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Error Message */}
