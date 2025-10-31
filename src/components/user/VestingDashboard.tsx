@@ -8,6 +8,7 @@ import { WalletConnectButton } from "./WalletConnectButton";
 import { apiClient } from "@/lib/apiClient";
 import { CircularProgress } from "@/components/ui/CircularProgress";
 import { RetryPrompt } from "@/components/ui/RetryPrompt";
+import { useClaimWithFee } from "@/hooks/useClaimWithFee";
 
 interface Pool {
   poolId: string;
@@ -583,9 +584,9 @@ interface ClaimModalProps {
 
 function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
   const [amount, setAmount] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [claimStep, setClaimStep] = useState<"input" | "processing" | "confirming">("input");
+  const [claimStep, setClaimStep] = useState<"input" | "signing" | "processing">("input");
   const [error, setError] = useState<string | null>(null);
+  const { executeClaim, loading } = useClaimWithFee();
 
   // Clear error when component mounts
   useEffect(() => {
@@ -609,34 +610,28 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
       return;
     }
 
-    setLoading(true);
     setError(null);
-    setClaimStep("processing");
+    setClaimStep("signing");
 
     try {
-      setClaimStep("processing");
-      const response = await apiClient.post<{
-        totalAmountClaimed: number;
-        poolBreakdown: Array<{ poolId: string; poolName: string; amountToClaim: number }>;
-        transactionSignature: string;
-      }>("/user/vesting/claim-all", {
-        userWallet: wallet,
-        amountToClaim: claimAmount,
-      }, {
-        timeout: 60000,
-        retries: 0, // No retries to prevent double claims
-      });
-
-      // Skip confirming step and go straight to success for faster UX
-      onSuccess(
-        `Successfully claimed ${claimAmount.toLocaleString()} $GARG`,
-        response.transactionSignature
-      );
+      // Execute the full claim flow: prepare -> sign -> submit
+      const result = await executeClaim(claimAmount);
+      
+      if (result) {
+        onSuccess(
+          `Successfully claimed ${result.totalAmountClaimed.toLocaleString()} $GARG`,
+          result.tokenTransactionSignature
+        );
+      } else {
+        setError("Failed to complete claim transaction");
+        setClaimStep("input");
+      }
     } catch (err) {
       if (err instanceof Error) {
-        // Check if this is a specific available balance error from the backend
         if (err.message.includes('exceeds available balance')) {
           setError(err.message);
+        } else if (err.message.includes('User rejected')) {
+          setError("Transaction cancelled by user");
         } else {
           setError(`Failed to claim rewards: ${err.message}`);
         }
@@ -644,14 +639,26 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
         setError("Failed to claim rewards");
       }
       setClaimStep("input");
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0b25] p-6 space-y-4">
+        {/* Signing State */}
+        {claimStep === "signing" && (
+          <>
+            <div className="flex items-center justify-center py-8">
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-4 border-white/10" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 animate-spin" />
+              </div>
+            </div>
+            <p className="text-center text-white font-semibold">Waiting for Signature...</p>
+            <p className="text-center text-sm text-white/60">Please approve the transaction in your wallet</p>
+          </>
+        )}
+
         {/* Processing State */}
         {claimStep === "processing" && (
           <>
@@ -663,21 +670,6 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
             </div>
             <p className="text-center text-white font-semibold">Processing Claim...</p>
             <p className="text-center text-sm text-white/60">Sending transaction to blockchain</p>
-          </>
-        )}
-
-        {/* Confirming State */}
-        {claimStep === "confirming" && (
-          <>
-            <div className="flex items-center justify-center py-8">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500/20">
-                <svg className="h-8 w-8 text-green-400 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-center text-white font-semibold">Confirming Transaction...</p>
-            <p className="text-center text-sm text-white/60">Waiting for blockchain confirmation</p>
           </>
         )}
 
