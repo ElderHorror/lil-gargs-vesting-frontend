@@ -417,7 +417,16 @@ export function VestingDashboard() {
                     {showBreakdown && summary.pools && (
                       <div className="mt-3 space-y-2">
                         {summary.pools
-                          .filter((p) => p.status === 'active' || p.claimable > 0 || p.status === 'paused' || p.status === 'cancelled')
+                          .filter((p) => {
+                            // Check if pool is fully vested AND fully claimed
+                            const isFullyVested = (p.locked ?? 0) <= 0;
+                            const isFullyClaimed = (p.claimable ?? 0) <= 0;
+                            const isCompleted = isFullyVested && isFullyClaimed;
+                            
+                            // Show only active or paused pools with claimable balance
+                            // Hide: completed pools, cancelled pools
+                            return !isCompleted && p.status !== 'cancelled' && (p.status === 'active' || p.status === 'paused' || p.claimable > 0);
+                          })
                           .map((pool) => {
                             // derive status
                             const isFullyVested = (pool.locked ?? 0) <= 0 && ((pool.claimed ?? 0) + (pool.claimable ?? 0)) > 0;
