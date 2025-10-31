@@ -73,10 +73,9 @@ export function VestingDashboard() {
         `/user/vesting/summary-all?wallet=${wallet}`,
         {
           timeout: 30000,
-          retries: 3,
+          retries: 1,
           retryDelay: 1000,
-          cacheKey: `vesting-summary-${wallet}`,
-          cacheDuration: 1 * 60 * 1000, // 1 minute
+          cache: 'no-store', // Disable caching to prevent stale data
         }
       );
       setSummary(response);
@@ -104,10 +103,9 @@ export function VestingDashboard() {
         `/user/vesting/claim-history?wallet=${wallet}`,
         {
           timeout: 30000,
-          retries: 3,
+          retries: 1,
           retryDelay: 1000,
-          cacheKey: `claim-history-${wallet}`,
-          cacheDuration: 1 * 60 * 1000, // 1 minute
+          cache: 'no-store', // Disable caching to prevent stale data
         }
       );
       setHistory(response ?? []);
@@ -135,11 +133,6 @@ export function VestingDashboard() {
     window.addEventListener('refresh-summary', handleRefreshSummary);
     return () => {
       window.removeEventListener('refresh-summary', handleRefreshSummary);
-      // Clear cache when component unmounts
-      if (wallet) {
-        apiClient.clearCache(`vesting-summary-${wallet}`);
-        apiClient.clearCache(`claim-history-${wallet}`);
-      }
     };
   }, [loadSummary, wallet]);
 
@@ -157,12 +150,6 @@ export function VestingDashboard() {
   }, [loadSummary, loadHistory, loadHistoryWithTimestamp]);
 
   const handleWalletChange = useCallback((newWallet: string | null) => {
-    // Clear cache for previous wallet
-    if (wallet) {
-      apiClient.clearCache(`vesting-summary-${wallet}`);
-      apiClient.clearCache(`claim-history-${wallet}`);
-    }
-    
     setWallet(newWallet);
     setSummary(null);
     setHistory([]);
@@ -622,10 +609,6 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
       return;
     }
 
-    // Clear cache before making the claim to ensure we have fresh data
-    apiClient.clearCache(`vesting-summary-${wallet}`);
-    apiClient.clearCache(`claim-history-${wallet}`);
-
     setLoading(true);
     setError(null);
     setClaimStep("processing");
@@ -640,9 +623,8 @@ function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
         userWallet: wallet,
         amountToClaim: claimAmount,
       }, {
-        timeout: 30000, // Reduced from 60s for faster feedback
-        retries: 1, // Reduced from 3 for faster failure detection
-        retryDelay: 500, // Reduced from 1000ms
+        timeout: 60000,
+        retries: 0, // No retries to prevent double claims
       });
 
       // Skip confirming step and go straight to success for faster UX
