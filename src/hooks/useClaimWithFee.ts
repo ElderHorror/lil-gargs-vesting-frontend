@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Transaction, Connection, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
 import { apiClient } from '../lib/apiClient';
 
 interface ClaimInitResponse {
@@ -26,9 +26,17 @@ interface ClaimInitResponse {
   };
 }
 
+interface PoolBreakdownItem {
+  poolId: string;
+  poolName: string;
+  amountToClaim: number;
+  availableFromPool: number;
+  vestingId: string;
+}
+
 interface ClaimResult {
   totalAmountClaimed: number;
-  poolBreakdown: Array<any>;
+  poolBreakdown: PoolBreakdownItem[];
   feePaid: number;
   feeTransactionSignature: string;
   tokenTransactionSignature: string;
@@ -107,7 +115,7 @@ export function useClaimWithFee() {
 
         // Step 3: Call /complete-claim with fee signature
         console.log('[CLAIM] Step 3: Completing claim...');
-        const completeResponse = await apiClient.post<any>(
+        const completeResponse = await apiClient.post<ClaimResult>(
           '/user/vesting/complete-claim',
           {
             userWallet: publicKey.toString(),
@@ -118,15 +126,12 @@ export function useClaimWithFee() {
 
         console.log('[CLAIM] Complete response:', completeResponse);
 
-        // Handle both response formats (with or without nested data)
-        const result = completeResponse?.data || completeResponse;
-        
-        if (!result || !result.totalAmountClaimed) {
+        if (!completeResponse || !completeResponse.totalAmountClaimed) {
           throw new Error('Invalid response from complete-claim endpoint');
         }
 
-        console.log('[CLAIM] Claim completed successfully:', result);
-        return result;
+        console.log('[CLAIM] Claim completed successfully:', completeResponse);
+        return completeResponse;
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to execute claim');
         console.error('[CLAIM] Error:', error);

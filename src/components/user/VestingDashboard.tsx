@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { Connection } from "@solana/web3.js";
 import { WalletConnectButton } from "./WalletConnectButton";
 import { apiClient } from "@/lib/apiClient";
@@ -157,7 +156,7 @@ export function VestingDashboard() {
     setError(null);
     setLastUpdated(null);
     isInitialLoad.current = true;
-  }, [wallet]);
+  }, []);
 
   const formatNumber = (num: number) => {
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -582,7 +581,7 @@ interface ClaimModalProps {
   connection: Connection;
 }
 
-function ClaimModal({ summary, onClose, onSuccess, wallet }: ClaimModalProps) {
+function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [claimStep, setClaimStep] = useState<"input" | "signing" | "processing">("input");
   const [error, setError] = useState<string | null>(null);
