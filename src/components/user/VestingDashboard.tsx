@@ -428,9 +428,9 @@ export function VestingDashboard() {
                             const isFullyClaimed = (p.claimable ?? 0) <= 0;
                             const isCompleted = isFullyVested && isFullyClaimed;
                             
-                            // Show only active or paused pools with claimable balance
-                            // Hide: completed pools, cancelled pools
-                            return !isCompleted && p.status !== 'cancelled' && (p.status === 'active' || p.status === 'paused' || p.claimable > 0);
+                            // Show only pools with claimable balance
+                            // Hide: completed pools, cancelled pools, pools with 0 claimable
+                            return !isCompleted && p.status !== 'cancelled' && (p.claimable > 0);
                           })
                           .map((pool) => {
                             // derive status
