@@ -424,7 +424,7 @@ export function VestingDashboard() {
                     {summary.totalClaimable > 0 && showBreakdown && summary.pools && (
                       <div className="mt-3 space-y-2">
                         {summary.pools
-                          .filter((p) => p.claimable > 0)
+                          .filter((p) => p.claimable > 0.001) // Use a threshold to filter out dust amounts
                           .map((pool) => {
                             // derive status
                             const isFullyVested = (pool.locked ?? 0) <= 0 && ((pool.claimed ?? 0) + (pool.claimable ?? 0)) > 0;
