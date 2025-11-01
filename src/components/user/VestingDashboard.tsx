@@ -410,19 +410,21 @@ export function VestingDashboard() {
                       <span className="font-semibold">{formatCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000))}</span>
                     </div>
                     {/* Breakdown Toggle */}
-                    <button
-                      onClick={() => setShowBreakdown((v) => !v)}
-                      className="mt-2 flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200"
-                    >
-                      <span>{showBreakdown ? "Hide Breakdown" : "View Breakdown"}</span>
-                      <svg className={`h-4 w-4 transition-transform ${showBreakdown ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    {showBreakdown && summary.pools && (
+                    {summary.totalClaimable > 0 && (
+                      <button
+                        onClick={() => setShowBreakdown((v) => !v)}
+                        className="mt-2 flex items-center gap-2 text-sm text-purple-300 hover:text-purple-200"
+                      >
+                        <span>{showBreakdown ? "Hide Breakdown" : "View Breakdown"}</span>
+                        <svg className={`h-4 w-4 transition-transform ${showBreakdown ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    )}
+                    {summary.totalClaimable > 0 && showBreakdown && summary.pools && (
                       <div className="mt-3 space-y-2">
                         {summary.pools
-                          .filter((p) => p.status === 'active' && (p.claimable > 0 || p.locked > 0))
+                          .filter((p) => p.claimable > 0)
                           .map((pool) => {
                             // derive status
                             const isFullyVested = (pool.locked ?? 0) <= 0 && ((pool.claimed ?? 0) + (pool.claimable ?? 0)) > 0;
