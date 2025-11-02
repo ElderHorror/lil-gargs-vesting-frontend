@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/apiClient";
 import { CircularProgress } from "@/components/ui/CircularProgress";
 import { RetryPrompt } from "@/components/ui/RetryPrompt";
 import { useClaimWithFee } from "@/hooks/useClaimWithFee";
+import { DEMO_WALLET, DEMO_SUMMARY, DEMO_HISTORY } from "@/lib/demoData";
 
 interface Pool {
   poolId: string;
@@ -55,6 +56,9 @@ export function VestingDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isInitialLoad = useRef(true);
   
+  // Demo mode state
+  const [demoMode, setDemoMode] = useState(false);
+  
   // Animated percentage counter
   const [animatedPercentage, setAnimatedPercentage] = useState(0);
   
@@ -68,6 +72,17 @@ export function VestingDashboard() {
   const loadSummary = useCallback(async () => {
     if (!wallet) {
       setSummary(null);
+      return;
+    }
+
+    // If demo mode, load demo data immediately
+    if (demoMode) {
+      setLoading(true);
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setSummary(DEMO_SUMMARY);
+      setLoading(false);
+      setLastUpdated(new Date());
       return;
     }
 
@@ -90,17 +105,22 @@ export function VestingDashboard() {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!error.message.includes('404')) {
         setError(error);
-        setRetryCount(0);
       }
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, [wallet]);
+  }, [wallet, retryCount, demoMode]);
 
   const loadHistory = useCallback(async () => {
     if (!wallet) {
       setHistory([]);
+      return;
+    }
+
+    // If demo mode, load demo history
+    if (demoMode) {
+      setHistory(DEMO_HISTORY);
       return;
     }
 
@@ -119,11 +139,10 @@ export function VestingDashboard() {
       const error = err instanceof Error ? err : new Error(String(err));
       if (!error.message.includes('404')) {
         setError(error);
-        setRetryCount(0);
+        console.error('[HISTORY] Error loading claim history:', err);
       }
-      setHistory([]);
     }
-  }, [wallet]);
+  }, [wallet, demoMode]);
 
   const loadHistoryWithTimestamp = useCallback(async () => {
     await loadHistory();
@@ -162,7 +181,27 @@ export function VestingDashboard() {
     setError(null);
     setLastUpdated(null);
     isInitialLoad.current = true;
+    setDemoMode(false); // Exit demo mode when wallet changes
   }, []);
+
+  const toggleDemoMode = useCallback(() => {
+    const newDemoMode = !demoMode;
+    setDemoMode(newDemoMode);
+    
+    if (newDemoMode) {
+      // Enter demo mode
+      setWallet(DEMO_WALLET);
+      setSummary(null);
+      setHistory([]);
+      setError(null);
+    } else {
+      // Exit demo mode
+      setWallet(null);
+      setSummary(null);
+      setHistory([]);
+      setError(null);
+    }
+  }, [demoMode]);
 
   const formatNumber = (num: number) => {
     return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -316,13 +355,43 @@ export function VestingDashboard() {
             />
             <h1 className="text-xl sm:text-2xl font-bold truncate">Lil Gargs Vesting</h1>
           </div>
-          <div className="flex shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Demo Mode Toggle */}
+            <button
+              onClick={toggleDemoMode}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                demoMode
+                  ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/50 hover:bg-yellow-500/30'
+                  : 'bg-purple-500/20 text-purple-300 border border-purple-500/50 hover:bg-purple-500/30'
+              }`}
+            >
+              {demoMode ? '✨ Exit Demo' : '👁️ View Demo'}
+            </button>
             <WalletConnectButton onWalletChange={handleWalletChange} />
           </div>
         </div>
 
+        {/* Demo Mode Banner */}
+        {demoMode && (
+          <div className="rounded-xl border-2 border-yellow-500/50 bg-yellow-500/10 p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-300 mb-1">Demo Mode Active</h3>
+                <p className="text-xs text-yellow-200/80">
+                  You're viewing sample data. No wallet connection required. Claims are simulated and won't execute real transactions.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Bottom row: Last updated + Refresh button */}
-        {wallet && (
+        {wallet && !demoMode && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             <span className="text-xs text-white/40">Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : 'Never'}</span>
             <button
@@ -621,15 +690,18 @@ export function VestingDashboard() {
           }}
           onSuccess={(message, signature) => {
             setSuccessToast({ message, signature });
-            // Clear cache after successful claim
-            apiClient.clearCache(`vesting-summary-${wallet}`);
-            apiClient.clearCache(`claim-history-${wallet}`);
+            // Clear cache after successful claim (skip in demo mode)
+            if (!demoMode) {
+              apiClient.clearCache(`vesting-summary-${wallet}`);
+              apiClient.clearCache(`claim-history-${wallet}`);
+            }
             void loadSummary();
             void loadHistoryWithTimestamp();
             setShowClaimModal(false);
           }}
           wallet={wallet || ""}
           connection={connection}
+          demoMode={demoMode}
         />
       )}
     </div>
@@ -642,9 +714,10 @@ interface ClaimModalProps {
   onSuccess: (message: string, signature: string) => void;
   wallet: string;
   connection: Connection;
+  demoMode?: boolean;
 }
 
-function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
+function ClaimModal({ summary, onClose, onSuccess, demoMode }: ClaimModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [claimStep, setClaimStep] = useState<"input" | "signing" | "processing">("input");
   const [error, setError] = useState<string | null>(null);
@@ -682,6 +755,16 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
 
     setError(null);
     setClaimStep("signing");
+
+    // Demo mode: simulate claim without real transaction
+    if (demoMode) {
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay
+      onSuccess(
+        `Demo: Successfully claimed ${claimAmount.toLocaleString()} $GARG`,
+        'DemoTxSignature...123abc'
+      );
+      return;
+    }
 
     try {
       // Execute the full claim flow: prepare -> sign -> submit
