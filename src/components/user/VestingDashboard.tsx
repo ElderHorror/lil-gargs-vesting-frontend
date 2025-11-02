@@ -54,6 +54,12 @@ export function VestingDashboard() {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const isInitialLoad = useRef(true);
+  
+  // Animated percentage counter
+  const [animatedPercentage, setAnimatedPercentage] = useState(0);
+  
+  // Live countdown timer
+  const [liveCountdown, setLiveCountdown] = useState(0);
 
   const connection = useMemo(
     () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
@@ -164,11 +170,62 @@ export function VestingDashboard() {
 
   const formatCountdown = (seconds: number) => {
     if (seconds <= 0) return "Fully unlocked";
+    
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
-    return `${days}d ${hours}h`;
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    // Show different formats based on time remaining
+    if (days > 0) {
+      return `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes}m ${secs}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    } else {
+      return `${secs}s`;
+    }
   };
 
+
+  // Animate percentage counter when summary changes
+  useEffect(() => {
+    if (!summary) return;
+    
+    const target = summary.vestedPercentage;
+    const duration = 1500; // 1.5 seconds
+    const steps = 60; // 60 frames for smooth animation
+    const increment = target / steps;
+    let current = 0;
+    
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        setAnimatedPercentage(target);
+        clearInterval(timer);
+      } else {
+        setAnimatedPercentage(current);
+      }
+    }, duration / steps);
+    
+    return () => clearInterval(timer);
+  }, [summary?.vestedPercentage]);
+  
+  // Initialize and update live countdown
+  useEffect(() => {
+    if (!summary) return;
+    setLiveCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000));
+  }, [summary]);
+  
+  // Tick countdown every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveCountdown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
 
   const formatDateTime = (value: string) => {
     const date = new Date(value);
@@ -369,7 +426,7 @@ export function VestingDashboard() {
                       {/* Progress */}
                       <div className="flex-shrink-0">
                         <CircularProgress
-                          percentage={summary.vestedPercentage}
+                          percentage={animatedPercentage}
                           label="Unlocked"
                           size={140}
                           strokeWidth={10}
@@ -403,11 +460,11 @@ export function VestingDashboard() {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/60">Vested</span>
-                      <span className="font-semibold">{summary.vestedPercentage.toFixed(1)}%</span>
+                      <span className="font-semibold">{animatedPercentage.toFixed(1)}%</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-white/60">Time to Full Unlock</span>
-                      <span className="font-semibold">{formatCountdown(summary.nextUnlockTime - Math.floor(Date.now() / 1000))}</span>
+                      <span className="font-semibold">{formatCountdown(liveCountdown)}</span>
                     </div>
                     {/* Breakdown Toggle */}
                     {summary.totalClaimable > 0 && (

@@ -2,8 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Admin Vesting Console",
-  description: "Control panel for Solana NFT vesting operations",
+  title: "Lil Gargs Vesting",
+  description: "Claim your $GARG token rewards from Lil Gargs vesting pools",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
