@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
 import { apiClient } from '../lib/apiClient';
+import Decimal from 'decimal.js';
 
 interface ClaimInitResponse {
   success: boolean;
@@ -42,10 +43,33 @@ interface ClaimResult {
   tokenTransactionSignature: string;
 }
 
+export type ClaimStatus = 
+  | 'idle'
+  | 'preparing'
+  | 'signing_fee'
+  | 'confirming_fee'
+  | 'processing_claim'
+  | 'confirming_claim'
+  | 'success'
+  | 'error';
+
+interface TransactionStatusResponse {
+  success: boolean;
+  status: 'pending' | 'confirmed' | 'failed';
+  message: string;
+  signature: string;
+  confirmations?: number;
+  slot?: number;
+  recordedInDatabase?: boolean;
+  error?: string;
+}
+
 export function useClaimWithFee() {
   const { publicKey, signTransaction, sendTransaction } = useWallet();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const [status, setStatus] = useState<ClaimStatus>('idle');
+  const [progress, setProgress] = useState(0);
 
   const executeClaim = useCallback(
     async (amountToClaim?: number): Promise<ClaimResult | null> => {
@@ -58,6 +82,8 @@ export function useClaimWithFee() {
 
       setLoading(true);
       setError(null);
+      setStatus('preparing');
+      setProgress(10);
 
       try {
         console.log('[CLAIM] Step 1: Initiating claim...');
@@ -82,6 +108,9 @@ export function useClaimWithFee() {
           pools: initResponse.claimDetails.poolBreakdown,
         });
 
+        setProgress(25);
+        setStatus('signing_fee');
+
         // Step 2: Sign and send fee payment transaction
         console.log('[CLAIM] Step 2: Signing fee payment transaction...');
         
@@ -105,13 +134,19 @@ export function useClaimWithFee() {
         const signedFeeTx = await signTransaction(feeTransaction);
         console.log('[CLAIM] Fee transaction signed, sending...');
         
+        setProgress(40);
+        setStatus('confirming_fee');
+        
         const feeSignature = await connection.sendRawTransaction(signedFeeTx.serialize());
         console.log('[CLAIM] Fee payment sent:', feeSignature);
         
-        // Wait for fee transaction confirmation
+        // Wait for fee transaction confirmation with polling
         console.log('[CLAIM] Waiting for fee payment confirmation...');
         await connection.confirmTransaction(feeSignature, 'confirmed');
         console.log('[CLAIM] Fee payment confirmed!');
+        
+        setProgress(60);
+        setStatus('processing_claim');
 
         // Step 3: Call /complete-claim with fee signature
         console.log('[CLAIM] Step 3: Completing claim...');
@@ -130,12 +165,23 @@ export function useClaimWithFee() {
           throw new Error('Invalid response from complete-claim endpoint');
         }
 
+        setProgress(80);
+        setStatus('confirming_claim');
+
+        // Poll transaction status until confirmed
+        const tokenSignature = completeResponse.tokenTransactionSignature;
+        await pollTransactionStatus(tokenSignature);
+
+        setProgress(100);
+        setStatus('success');
         console.log('[CLAIM] Claim completed successfully:', completeResponse);
         return completeResponse;
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to execute claim');
         console.error('[CLAIM] Error:', error);
         setError(error);
+        setStatus('error');
+        setProgress(0);
         return null;
       } finally {
         setLoading(false);
@@ -144,9 +190,47 @@ export function useClaimWithFee() {
     [publicKey, signTransaction, sendTransaction]
   );
 
+  // Poll transaction status endpoint
+  const pollTransactionStatus = async (signature: string, maxAttempts = 10): Promise<void> => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const statusResponse = await apiClient.get<TransactionStatusResponse>(
+          `/user/vesting/claim-status/${signature}`
+        );
+
+        console.log(`[CLAIM-STATUS] Attempt ${attempt + 1}/${maxAttempts}:`, statusResponse.status);
+
+        if (statusResponse.status === 'confirmed') {
+          console.log('[CLAIM-STATUS] Transaction confirmed!');
+          return;
+        }
+
+        if (statusResponse.status === 'failed') {
+          throw new Error(statusResponse.error || 'Transaction failed on-chain');
+        }
+
+        // Wait 3 seconds before next poll
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      } catch (err) {
+        console.error('[CLAIM-STATUS] Polling error:', err);
+        // Continue polling even if status check fails
+        if (attempt < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+    }
+
+    // If we reach here, transaction might still be pending
+    console.warn('[CLAIM-STATUS] Max polling attempts reached, transaction may still be processing');
+  };
+
   return {
     executeClaim,
     loading,
     error,
+    status,
+    progress,
   };
 }

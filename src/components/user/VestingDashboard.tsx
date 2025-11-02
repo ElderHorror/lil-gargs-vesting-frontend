@@ -591,7 +591,7 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
   const [amount, setAmount] = useState<string>("");
   const [claimStep, setClaimStep] = useState<"input" | "signing" | "processing">("input");
   const [error, setError] = useState<string | null>(null);
-  const { executeClaim, loading } = useClaimWithFee();
+  const { executeClaim, loading, status, progress } = useClaimWithFee();
 
   // Clear error when component mounts
   useEffect(() => {
@@ -610,6 +610,14 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
     }
 
     const claimAmount = parseFloat(amount);
+    
+    // Minimum claim amount validation (matches backend)
+    const MIN_CLAIM_AMOUNT = 0.001;
+    if (claimAmount < MIN_CLAIM_AMOUNT) {
+      setError(`Minimum claim amount is ${MIN_CLAIM_AMOUNT} tokens`);
+      return;
+    }
+    
     if (claimAmount > summary.totalClaimable) {
       setError(`Amount exceeds available balance of ${summary.totalClaimable.toFixed(2)}`);
       return;
@@ -628,21 +636,50 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
           result.tokenTransactionSignature
         );
       } else {
-        setError("Failed to complete claim transaction");
+        setError("Transaction failed. Please try again.");
         setClaimStep("input");
       }
     } catch (err) {
+      let errorMessage = "Something went wrong. Please try again.";
+      
       if (err instanceof Error) {
-        if (err.message.includes('exceeds available balance')) {
-          setError(err.message);
-        } else if (err.message.includes('User rejected')) {
-          setError("Transaction cancelled by user");
-        } else {
-          setError(`Failed to claim rewards: ${err.message}`);
+        const msg = err.message.toLowerCase();
+        
+        // User cancelled/rejected transaction
+        if (msg.includes('user rejected') || msg.includes('user cancelled') || msg.includes('user denied')) {
+          errorMessage = "You cancelled the transaction. No tokens were claimed.";
         }
-      } else {
-        setError("Failed to claim rewards");
+        // Insufficient funds for fee
+        else if (msg.includes('insufficient funds') || msg.includes('insufficient lamports') || msg.includes('not enough sol')) {
+          errorMessage = "Insufficient SOL for transaction fee. Please add SOL to your wallet.";
+        }
+        // Exceeds available balance
+        else if (msg.includes('exceeds available balance') || msg.includes('exceeds balance')) {
+          errorMessage = "Amount exceeds your available balance. Try refreshing or claiming less.";
+        }
+        // Network/timeout errors
+        else if (msg.includes('timeout') || msg.includes('timed out')) {
+          errorMessage = "Transaction timed out. It may still succeed - check your history in a moment.";
+        }
+        // Transaction failed on-chain
+        else if (msg.includes('transaction failed') || msg.includes('failed on-chain')) {
+          errorMessage = "Transaction failed on blockchain. Please try again with a smaller amount.";
+        }
+        // Wallet not connected
+        else if (msg.includes('wallet not connected') || msg.includes('not connected')) {
+          errorMessage = "Wallet disconnected. Please reconnect your wallet and try again.";
+        }
+        // Minimum amount error
+        else if (msg.includes('minimum claim amount')) {
+          errorMessage = err.message; // Use exact message from backend
+        }
+        // Generic error with message
+        else if (err.message && err.message.length < 100) {
+          errorMessage = err.message;
+        }
       }
+      
+      setError(errorMessage);
       setClaimStep("input");
     }
   };
@@ -650,21 +687,60 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0b25] p-6 space-y-4">
-        {/* Signing State */}
+        {/* Progressive Status Display */}
         {claimStep === "signing" && (
           <>
             <div className="flex items-center justify-center py-8">
-              <div className="relative h-16 w-16">
-                <div className="absolute inset-0 rounded-full border-4 border-white/10" />
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 animate-spin" />
+              <div className="relative h-24 w-24">
+                <svg className="transform -rotate-90" width="96" height="96">
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="rgba(255,255,255,0.1)"
+                    strokeWidth="8"
+                    fill="none"
+                  />
+                  <circle
+                    cx="48"
+                    cy="48"
+                    r="40"
+                    stroke="#a855f7"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeDasharray={`${2 * Math.PI * 40}`}
+                    strokeDashoffset={`${2 * Math.PI * 40 * (1 - progress / 100)}`}
+                    className="transition-all duration-500"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-white font-bold text-lg">{progress}%</span>
+                </div>
               </div>
             </div>
-            <p className="text-center text-white font-semibold">Waiting for Signature...</p>
-            <p className="text-center text-sm text-white/60">Please approve the transaction in your wallet</p>
+            
+            <div className="space-y-2">
+              <p className="text-center text-white font-semibold">
+                {status === 'preparing' && 'Preparing Claim...'}
+                {status === 'signing_fee' && 'Waiting for Signature...'}
+                {status === 'confirming_fee' && 'Confirming Fee Payment...'}
+                {status === 'processing_claim' && 'Processing Claim...'}
+                {status === 'confirming_claim' && 'Confirming Transaction...'}
+                {status === 'success' && 'Claim Successful!'}
+              </p>
+              <p className="text-center text-sm text-white/60">
+                {status === 'preparing' && 'Calculating available amounts...'}
+                {status === 'signing_fee' && 'Please approve the transaction in your wallet'}
+                {status === 'confirming_fee' && 'Waiting for blockchain confirmation...'}
+                {status === 'processing_claim' && 'Transferring tokens from treasury...'}
+                {status === 'confirming_claim' && 'Verifying transaction on Solana...'}
+                {status === 'success' && 'Your tokens have been claimed!'}
+              </p>
+            </div>
           </>
         )}
 
-        {/* Processing State */}
+        {/* Processing State (Legacy - kept for compatibility) */}
         {claimStep === "processing" && (
           <>
             <div className="flex items-center justify-center py-8">
@@ -699,12 +775,14 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-white/60">Enter Amount</label>
+              <label className="text-sm text-white/60">Enter Amount (min: 0.001)</label>
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
+                step="0.001"
+                min="0.001"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-white placeholder-white/30 focus:border-purple-500 focus:outline-none"
               />
             </div>
@@ -734,21 +812,48 @@ function ClaimModal({ summary, onClose, onSuccess }: ClaimModalProps) {
             {/* Removed per redesign: no breakdown needed in the withdrawal modal */}
 
             {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="flex-1">{error}</span>
-                  {error.includes('exceeds available balance') && (
-                    <button 
-                      onClick={() => {
-                        setError(null);
-                        // Refresh the summary data
-                        window.dispatchEvent(new CustomEvent('refresh-summary'));
-                      }}
-                      className="text-xs underline hover:text-red-300 whitespace-nowrap"
-                    >
-                      Refresh balance
-                    </button>
-                  )}
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {error.includes('cancelled') ? (
+                      <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    ) : error.includes('Insufficient SOL') ? (
+                      <svg className="w-5 h-5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-sm font-medium ${
+                      error.includes('cancelled') ? 'text-yellow-300' : 
+                      error.includes('Insufficient SOL') ? 'text-orange-300' : 
+                      'text-red-300'
+                    }`}>
+                      {error}
+                    </p>
+                    {error.includes('Insufficient SOL') && (
+                      <p className="text-xs text-white/60 mt-1">
+                        You need a small amount of SOL (~0.01) to pay for the transaction fee.
+                      </p>
+                    )}
+                    {error.includes('exceeds available balance') && (
+                      <button 
+                        onClick={() => {
+                          setError(null);
+                          window.dispatchEvent(new CustomEvent('refresh-summary'));
+                        }}
+                        className="text-xs text-purple-400 hover:text-purple-300 underline mt-1"
+                      >
+                        Refresh balance
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

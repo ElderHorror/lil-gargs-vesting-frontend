@@ -516,6 +516,26 @@ export function CreateVestingModal({ open, onClose, mode, onModeChange }: Create
               <span className="text-xs text-white/40">Funds remain locked until cliff. Leave empty for linear unlock from start.</span>
             </label>
           </div>
+
+          {/* Streamflow Deployment Option */}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs uppercase tracking-[0.35em] text-white/50 mb-3">Deployment Options</p>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={skipStreamflow}
+                onChange={(e) => setSkipStreamflow(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-white/10 text-purple-600 focus:ring-purple-500 focus:ring-offset-0"
+              />
+              <div className="flex-1">
+                <span className="text-sm text-white font-medium">Skip Streamflow Deployment</span>
+                <p className="text-xs text-white/50 mt-0.5">
+                  Create pool in database only without deploying to Streamflow protocol. 
+                  Useful for testing or when Streamflow is unavailable.
+                </p>
+              </div>
+            </label>
+          </div>
         </section>
 
         {currentMode === "manual" ? (
