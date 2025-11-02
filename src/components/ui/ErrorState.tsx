@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface ErrorStateProps {
   title?: string;
   message: string;
@@ -12,9 +14,11 @@ export function ErrorState({
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
       <div className="mb-6">
-        <img 
+        <Image 
           src="/WhatsApp Image 2025-10-04 at 12.46.50 PM.jpeg" 
           alt="Lil Gargs" 
+          width={128}
+          height={128}
           className="w-32 h-32 rounded-full opacity-50"
         />
       </div>

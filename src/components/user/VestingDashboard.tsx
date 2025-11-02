@@ -110,7 +110,7 @@ export function VestingDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [wallet, retryCount, demoMode]);
+  }, [wallet, demoMode]);
 
   const loadHistory = useCallback(async () => {
     if (!wallet) {
@@ -231,13 +231,12 @@ export function VestingDashboard() {
   // Animate percentage counter when summary changes
   useEffect(() => {
     if (!summary) return;
-    
     const target = summary.vestedPercentage;
     const duration = 1500; // 1.5 seconds
     const steps = 60; // 60 frames for smooth animation
     const increment = target / steps;
     let current = 0;
-    
+
     const timer = setInterval(() => {
       current += increment;
       if (current >= target) {
@@ -247,9 +246,9 @@ export function VestingDashboard() {
         setAnimatedPercentage(current);
       }
     }, duration / steps);
-    
+
     return () => clearInterval(timer);
-  }, [summary?.vestedPercentage]);
+  }, [summary]);
   
   // Initialize and update live countdown
   useEffect(() => {
@@ -383,7 +382,7 @@ export function VestingDashboard() {
               <div className="flex-1">
                 <h3 className="text-sm font-semibold text-yellow-300 mb-1">Demo Mode Active</h3>
                 <p className="text-xs text-yellow-200/80">
-                  You're viewing sample data. No wallet connection required. Claims are simulated and won't execute real transactions.
+                  You&apos;re viewing sample data. No wallet connection required. Claims are simulated and won&apos;t execute real transactions.
                 </p>
               </div>
             </div>

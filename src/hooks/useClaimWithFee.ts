@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
 import { apiClient } from '../lib/apiClient';
-import Decimal from 'decimal.js';
 
 interface ClaimInitResponse {
   success: boolean;
