@@ -65,9 +65,10 @@ export function VestingDashboard() {
   // Live countdown timer
   const [liveCountdown, setLiveCountdown] = useState(0);
 
+  const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "";
   const connection = useMemo(
-    () => new Connection('https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a'),
-    []
+    () => new Connection(RPC_URL),
+    [RPC_URL]
   );
   const loadSummary = useCallback(async () => {
     if (!wallet) {

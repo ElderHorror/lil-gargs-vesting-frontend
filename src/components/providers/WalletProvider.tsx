@@ -6,7 +6,11 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter, SolflareWalletAdapter, TorusWalletAdapter } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-const RPC_ENDPOINT = "https://mainnet.helius-rpc.com/?api-key=17f39a5b-e46f-42f7-a4e3-3ece44a6426a";
+const RPC_ENDPOINT = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "";
+if (!RPC_ENDPOINT && typeof window !== "undefined") {
+  // eslint-disable-next-line no-console
+  console.warn("NEXT_PUBLIC_SOLANA_RPC_URL is not set. Wallet connections may fail.");
+}
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(
